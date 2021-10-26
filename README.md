@@ -33,7 +33,9 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 
 - [x] visualize sequences of pulses ~~using `matplotlib`~~
 - [x] Introduce MS gate
-- [ ] Calculate the state
-- [ ] $\tilde B_{C(P)}^\dag$ engineered pulse
+- [x] Calculate the state
+- [x] `back_to_z()`  (engineered pulse)
+- [ ] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
+- [ ] Debug the MS gate!!
 - [ ] `compiler` to produce hfgui / artiq compatible pulses
 - [ ] `decompiler` to load the pulses into gates

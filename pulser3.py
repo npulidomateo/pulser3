@@ -18,8 +18,9 @@
 
 import qiskit as qk
 from qiskit.circuit.library.standard_gates import RGate, IGate, PhaseGate, U3Gate
+from qiskit.circuit.quantumcircuit import QuantumCircuit
 from qiskit.quantum_info import partial_trace
-from qiskit.visualization import plot_bloch_multivector
+from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
 import matplotlib.pyplot as plt
 from qiskit.visualization.state_visualization import plot_bloch_multivector
@@ -81,6 +82,7 @@ sx = np.array([[0, 1],[1, 0]])
 sy = np.array([[0, -1j],[1j, 0]])
 sz = np.array([[1, 0],[0, -1]])
 
+# https://quantumcomputing.stackexchange.com/a/16921
 # Style definition for qc.draw('mpl', style=style)
 style={'displaycolor': {
         'B x': ('#00ff00', '#000000'),
@@ -90,7 +92,6 @@ style={'displaycolor': {
         }}
 
 # Make the generated sequences reproducible
-np.random.seed(999)
 
 
 class Pulser:
@@ -98,9 +99,14 @@ class Pulser:
 
     svsim = qk.Aer.get_backend('statevector_simulator')
 
-    def __init__(self):
+    def __init__(self, seed=999):
         self.circuits = []
         self.legends_l_k_m = []
+        self.final_states = []
+        
+        self.rng = np.random.default_rng(seed)
+
+        
 
     @staticmethod
     def cartesian_to_spherical(vector_car):
@@ -126,45 +132,13 @@ class Pulser:
     def get_subsystems(self, statevector):
         return partial_trace(statevector, [1]), partial_trace(statevector, [0])
 
-    def back_to_z_borked(self, qc):
-        """ Go back to north or south poles.
-            WARNING: Borked, do not use.
-
-        params: qc
-        returns: list of engineered_gates (two)
-        """
-        final_state= np.random.choice([0, 1])
-        engineered_gates = [None for _ in range(2)]
-        subsystems = self.get_subsystems(self.get_statevector(qc))
-        sigmas = [sx, sy, sz]
-        for qubit, subsystem in enumerate(subsystems):
-            for axis, sigma in enumerate(sigmas):
-                proj = np.trace(np.matmul(subsystem, sigma))
-                if np.isclose(np.abs(proj),1):
-                    signum = np.real(proj)/ np.abs(np.real(proj))
-                    break
-            print('qubit', qubit, 'axis', axis, 'signum', signum)
-            flip = (int(not(bool(final_state)))*pi) * 0
-            print('flip', flip)
-            print('bloch_vector', self.get_statevector(qc))
-            if axis in [0, 1]:
-                rotation_axis = flip + axis*pi/2 + pi/2
-                gate = RGate(pi/2, rotation_axis)
-            elif axis == 2:
-                gate = RGate(flip, 0)
-            else:
-                print('gate was', gate)
-            engineered_gates[qubit] = gate
-        return engineered_gates
-
-
     def back_to_z(self, qc):
         """ Go back to north or south poles.
 
         params: qc
         returns: list of engineered_gates (two)
         """
-        final_state= np.random.choice([0, 1])
+        final_state = self.rng.choice([0, 1])
         if not final_state:
             dest_vector = np.array([0, 0, -1])
         else:
@@ -212,6 +186,7 @@ class Pulser:
 
 
     def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True):
+        print(__name__)
 
         # Prepare basis change combinations
         B_operators = [B_x, B_y, B_z, I]
@@ -231,12 +206,12 @@ class Pulser:
                     qc = qk.QuantumCircuit(2)
                     qc.append(Bi, [0])
                     qc.append(Bj, [1])
-                    qc.append(np.random.choice(paulis), [0])
-                    qc.append(np.random.choice(paulis), [1])
+                    qc.append(self.rng.choice(paulis), [0])
+                    qc.append(self.rng.choice(paulis), [1])
                     for _ in range(m):
                         qc.append(ms_gate, [0, 1])
-                        qc.append(np.random.choice(paulis), [0])
-                        qc.append(np.random.choice(paulis), [1])
+                        qc.append(self.rng.choice(paulis), [0])
+                        qc.append(self.rng.choice(paulis), [1])
                     # calculate and append the engineered gates
                     if final_pulses:
                         engineered_gates = self.back_to_z(qc)
@@ -260,7 +235,7 @@ def main_debug_back_to_z():
     pulser = Pulser()
     pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=False)
     for i, qc in enumerate(pulser.circuits):
-        if not(i == 14 or True):
+        if not(i == 15 or False):
             continue
         print('\n\ncircuit', i)
         engineered_gates = pulser.back_to_z(qc)
@@ -270,28 +245,60 @@ def main_debug_back_to_z():
         print(qc)
         counts = pulser.get_counts(qc)
         print('counts from main', counts)
+        plot_bloch_multivector(qc)
+        plt.show()
 
+def main_nonconsistent_epulses():
+    my_pulser = Pulser()
+    your_pulser = Pulser()
 
-def main_custom_gates():
-    qc = qk.QuantumCircuit(2)
-    qc.append(B_x, [0])
-    qc.append(B_y, [1])
-    qc.append(R_z, [0])
-    qc.append(R_my, [1])
-    qc.append(R_z, [1])
-    qc.append(ms_gate, [0, 1])
-    qc.append(I, [0])
+    my_pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=False)
+    your_pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=True)
+    epulses = your_pulser.back_to_z(your_pulser.circuits[0])
+
+    qc = QuantumCircuit(2)
+    qc.append(epulses[0],[0])
+    qc.append(epulses[1],[1])
     print(qc)
-    # https://quantumcomputing.stackexchange.com/a/16921
-    
-    qc.draw('mpl', style=style)
-    plt.show()
+
+    print(my_pulser.circuits[0])
+    print(your_pulser.circuits[0])
+
+def main_debug_ms_gate():
+    svsim = qk.Aer.get_backend('statevector_simulator')
+
+    ms_qc = QuantumCircuit(2, name='msgate')
+    ms_qc.h(0)
+    ms_qc.cx(0, 1)
+    ms_qc.append(PhaseGate(pi/2), [1])    
+    msgate = ms_qc.to_instruction()
+
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.append(PhaseGate(pi/2), [1])    
+    print(qc)
+    trans_qc = qk.transpile(qc, svsim) 
+    counts = svsim.run(trans_qc).result().get_counts()
+    state = svsim.run(trans_qc).result().get_statevector()
+    print(counts) 
+    print()
+    for row in state:
+        print("%f + i%f" % (np.real(row), np.imag(row)))
+    print()
+
+    qc = QuantumCircuit(2)
+    qc.append(msgate, [0, 1])  
+    qc.r(-pi/2, 0, 0)  
+    qc.r(-pi/2, 0, 1)  
+    qc.append(msgate, [0, 1])    
+    print(qc)
+    trans_qc = qk.transpile(qc, svsim) 
+    counts = svsim.run(trans_qc).result().get_counts()
+    state = svsim.run(trans_qc).result().get_statevector()
+    print(counts) 
 
 
 if __name__ == '__main__':
     main_debug_back_to_z()
-    
-
-
-            
 
