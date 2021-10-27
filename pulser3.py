@@ -17,8 +17,7 @@
 
 
 import qiskit as qk
-from qiskit.circuit.library.standard_gates import RGate, IGate, PhaseGate, U3Gate
-from qiskit.circuit.quantumcircuit import QuantumCircuit
+from qiskit.circuit.library.standard_gates import RGate, IGate, PhaseGate, RXXGate
 from qiskit.quantum_info import partial_trace
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
@@ -209,7 +208,7 @@ class Pulser:
                     qc.append(self.rng.choice(paulis), [0])
                     qc.append(self.rng.choice(paulis), [1])
                     for _ in range(m):
-                        qc.append(ms_gate, [0, 1])
+                        qc.append(RXXGate(pi/2), [0, 1])
                         qc.append(self.rng.choice(paulis), [0])
                         qc.append(self.rng.choice(paulis), [1])
                     # calculate and append the engineered gates
@@ -233,9 +232,9 @@ def main_cycle_benchmark():
 
 def main_debug_back_to_z():
     pulser = Pulser()
-    pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=False)
+    pulser.cycle_benchmark(L=1, m_list=[2], final_pulses=False)
     for i, qc in enumerate(pulser.circuits):
-        if not(i == 15 or False):
+        if not(i == 15 or True):
             continue
         print('\n\ncircuit', i)
         engineered_gates = pulser.back_to_z(qc)
@@ -244,9 +243,10 @@ def main_debug_back_to_z():
         print('circuits from main')
         print(qc)
         counts = pulser.get_counts(qc)
+        print(qc.qasm())
         print('counts from main', counts)
-        plot_bloch_multivector(qc)
-        plt.show()
+        # plot_bloch_multivector(qc)
+        # plt.show()
 
 def main_nonconsistent_epulses():
     my_pulser = Pulser()
@@ -256,47 +256,13 @@ def main_nonconsistent_epulses():
     your_pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=True)
     epulses = your_pulser.back_to_z(your_pulser.circuits[0])
 
-    qc = QuantumCircuit(2)
+    qc = qk.QuantumCircuit(2)
     qc.append(epulses[0],[0])
     qc.append(epulses[1],[1])
     print(qc)
 
     print(my_pulser.circuits[0])
     print(your_pulser.circuits[0])
-
-def main_debug_ms_gate():
-    svsim = qk.Aer.get_backend('statevector_simulator')
-
-    ms_qc = QuantumCircuit(2, name='msgate')
-    ms_qc.h(0)
-    ms_qc.cx(0, 1)
-    ms_qc.append(PhaseGate(pi/2), [1])    
-    msgate = ms_qc.to_instruction()
-
-    qc = QuantumCircuit(2)
-    qc.h(0)
-    qc.cx(0, 1)
-    qc.append(PhaseGate(pi/2), [1])    
-    print(qc)
-    trans_qc = qk.transpile(qc, svsim) 
-    counts = svsim.run(trans_qc).result().get_counts()
-    state = svsim.run(trans_qc).result().get_statevector()
-    print(counts) 
-    print()
-    for row in state:
-        print("%f + i%f" % (np.real(row), np.imag(row)))
-    print()
-
-    qc = QuantumCircuit(2)
-    qc.append(msgate, [0, 1])  
-    qc.r(-pi/2, 0, 0)  
-    qc.r(-pi/2, 0, 1)  
-    qc.append(msgate, [0, 1])    
-    print(qc)
-    trans_qc = qk.transpile(qc, svsim) 
-    counts = svsim.run(trans_qc).result().get_counts()
-    state = svsim.run(trans_qc).result().get_statevector()
-    print(counts) 
 
 
 if __name__ == '__main__':
