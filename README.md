@@ -1,4 +1,4 @@
-# Pulser 2
+# Pulser 3
 
 Create 2-qubit pulse sequences for *cycle benchmarking* and read sequences from the generated `.dc` files or from `openQASM 2.0` files.
 
