@@ -34,10 +34,10 @@ sz = np.array([[1, 0],[0, -1]])
 # https://quantumcomputing.stackexchange.com/a/16921
 # Style definition for qc.draw('mpl', style=style)
 style={'displaycolor': {
-        'B x': ('#00ff00', '#000000'),
-        'B y': ('#00ff00', '#000000'),
-        'B z': ('#00ff00', '#000000'),
-        'MS': ('#ff5599', '#000000'),
+        'Rx': ('#00ff00', '#000000'),
+        'Ry': ('#00ff00', '#000000'),
+        'Rz': ('#00ff00', '#000000'),
+        'Rxx': ('#ff5599', '#000000'),
         }}
 
 
@@ -143,19 +143,15 @@ class Pulser:
 
 
     def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True):
-        print(__name__)
 
         # Prepare basis change combinations
-        # B_operators = [B_x, B_y, B_z, I]
         B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]
         B_combinations = []
         for Bi in B_operators:
             for Bj in B_operators:
                 B_combinations.append((Bi, Bj))
-        # B_combinations = B_combinations[:-1]
 
         # Paulis to choose from:
-        # paulis = [R_x, R_mx, R_y, R_my, R_z, R_mz, I]
         paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
 
         # Assemble and store circuits
