@@ -17,64 +17,14 @@
 
 
 import qiskit as qk
-from qiskit.circuit.library.standard_gates import RGate, IGate, PhaseGate, RXXGate
+from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, RZGate, RXXGate
 from qiskit.quantum_info import partial_trace
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
 import matplotlib.pyplot as plt
-from qiskit.visualization.state_visualization import plot_bloch_multivector
 
 # Alias numpy pi for convenience
 pi = np.pi
-
-# Define custom gates
-# https://quantumcomputing.stackexchange.com/a/13160
-# Use via e.g. `qc.append(ms_gate, [0, 1])`
-
-ms_qc = qk.QuantumCircuit(2, name='MS')
-ms_qc.h(0)
-ms_qc.cx(0, 1)
-ms_gate = ms_qc.to_instruction()
-
-B_x_qc = qk.QuantumCircuit(1, name='B x')
-B_x_qc.append(RGate(theta=pi/2, phi=0), [0])
-B_x = B_x_qc.to_instruction()
-
-B_y_qc = qk.QuantumCircuit(1, name='B y')
-B_y_qc.append(RGate(theta=pi/2, phi=pi/2), [0])
-B_y = B_y_qc.to_instruction()
-
-B_z_qc = qk.QuantumCircuit(1, name='B z')
-B_z_qc.append(PhaseGate(theta=pi/2), [0])
-B_z = B_z_qc.to_instruction()
-
-R_x_qc = qk.QuantumCircuit(1, name='R x')
-R_x_qc.append(RGate(theta=pi, phi=0), [0])
-R_x = R_x_qc.to_instruction()
-
-R_y_qc = qk.QuantumCircuit(1, name='R y')
-R_y_qc.append(RGate(theta=pi, phi=pi/2), [0])
-R_y = R_y_qc.to_instruction()
-
-R_z_qc = qk.QuantumCircuit(1, name='R z')
-R_z_qc.append(PhaseGate(theta=pi), [0])
-R_z = R_z_qc.to_instruction()
-
-R_mz_qc = qk.QuantumCircuit(1, name='R -z')
-R_mz_qc.append(PhaseGate(theta=-pi), [0])
-R_mz = R_mz_qc.to_instruction()
-
-R_mx_qc = qk.QuantumCircuit(1, name='R -x')
-R_mx_qc.append(RGate(theta=pi, phi=0+pi), [0])
-R_mx = R_mx_qc.to_instruction()
-
-R_my_qc = qk.QuantumCircuit(1, name='R -y')
-R_my_qc.append(RGate(theta=pi, phi=pi/2+pi), [0])
-R_my = R_my_qc.to_instruction()
-
-I_qc = qk.QuantumCircuit(1, name='I')
-I_qc.append(IGate(), [0])
-I = I_qc.to_instruction()
 
 # Good ol' Pauli matrices
 sx = np.array([[0, 1],[1, 0]])
@@ -90,11 +40,9 @@ style={'displaycolor': {
         'MS': ('#ff5599', '#000000'),
         }}
 
-# Make the generated sequences reproducible
-
 
 class Pulser:
-    """Create, store and compile quantum circuits"""
+    """Create, store, transpile and compile 2-qubit quantum circuits"""
 
     svsim = qk.Aer.get_backend('statevector_simulator')
 
@@ -102,10 +50,10 @@ class Pulser:
         self.circuits = []
         self.legends_l_k_m = []
         self.final_states = []
-        
+
+        # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
 
-        
 
     @staticmethod
     def cartesian_to_spherical(vector_car):
@@ -131,10 +79,20 @@ class Pulser:
     def get_subsystems(self, statevector):
         return partial_trace(statevector, [1]), partial_trace(statevector, [0])
 
-    def back_to_z(self, qc):
+    @staticmethod
+    def get_bloch_vector(rho):
+        bloch_vector = np.ndarray(shape=(3,), dtype=float)
+        sigmas = [sx, sy, sz]
+        for axis, sigma in enumerate(sigmas):
+            proj = np.real(np.trace(np.matmul(rho, sigma)))
+            bloch_vector[axis] = proj
+        return bloch_vector
+
+
+    def back_to_z(self, qc, verbose=False):
         """ Go back to north or south poles.
 
-        params: qc
+        params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
         """
         final_state = self.rng.choice([0, 1])
@@ -145,42 +103,42 @@ class Pulser:
         
         engineered_gates = [None for _ in range(2)]
         subsystems = self.get_subsystems(self.get_statevector(qc))
-        sigmas = [sx, sy, sz]
-        
-        for qubit, subsystem in enumerate(subsystems):
-            bloch_vector = np.ndarray(shape=(3,), dtype=float)
 
-            for axis, sigma in enumerate(sigmas):
-                proj = np.real(np.trace(np.matmul(subsystem, sigma)))
-                bloch_vector[axis] = proj
-                
+        for qubit, subsystem in enumerate(subsystems):
+            bloch_vector = self.get_bloch_vector(subsystem)
             rotation_axis = np.cross(bloch_vector, dest_vector)
             if np.linalg.norm(rotation_axis) <= 1e-5 and np.inner(bloch_vector, dest_vector) < 0:
                 phi = 0
                 rotation_angle = pi
-                print()
-                print('bloch_vector', bloch_vector)
-                print('dest_vector', dest_vector)
-                print('rotation_axis', rotation_axis)
-                print('anti-parallel --> pi flip')
+                if verbose:
+                    print()
+                    print('bloch_vector', bloch_vector)
+                    print('dest_vector', dest_vector)
+                    print('rotation_axis', rotation_axis)
+                    print('anti-parallel --> pi flip')
             else:
-                print()
-                print('bloch_vector', bloch_vector)
-                print('dest_vector', dest_vector)
-                print('rotation_axis', rotation_axis)
+                
                 rotation_angle = np.arcsin(np.linalg.norm(rotation_axis) / np.linalg.norm(bloch_vector) / np.linalg.norm(dest_vector))
                 r, theta, phi = self.cartesian_to_spherical(rotation_axis)
-                print('rotation_angle', rotation_angle)
+                if verbose:
+                    print()
+                    print('bloch_vector', bloch_vector)
+                    print('dest_vector', dest_vector)
+                    print('rotation_axis', rotation_axis)
+                    print('rotation_angle', rotation_angle)
             if np.abs(rotation_angle) < 1e-5:
                 gate = IGate()
             else:
                 gate = RGate(rotation_angle, phi)
             engineered_gates[qubit] = gate
-        print(self.get_counts(qc))
-        qc2 = qc.copy()
-        for i, gate in enumerate(engineered_gates):
-            qc2.append(gate, [i])
-        print(self.get_counts(qc2))
+        
+        if verbose:
+            print(self.get_counts(qc))
+            qc2 = qc.copy()
+            for i, gate in enumerate(engineered_gates):
+                qc2.append(gate, [i])
+            print(self.get_counts(qc2))
+
         return engineered_gates
 
 
@@ -188,7 +146,8 @@ class Pulser:
         print(__name__)
 
         # Prepare basis change combinations
-        B_operators = [B_x, B_y, B_z, I]
+        # B_operators = [B_x, B_y, B_z, I]
+        B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]
         B_combinations = []
         for Bi in B_operators:
             for Bj in B_operators:
@@ -196,7 +155,8 @@ class Pulser:
         # B_combinations = B_combinations[:-1]
 
         # Paulis to choose from:
-        paulis = [R_x, R_mx, R_y, R_my, R_z, R_mz, I]
+        # paulis = [R_x, R_mx, R_y, R_my, R_z, R_mz, I]
+        paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
 
         # Assemble and store circuits
         for l in range(L):
@@ -222,7 +182,7 @@ class Pulser:
 
 def main_cycle_benchmark():
     pulser = Pulser()
-    pulser.cycle_benchmark(L=1, m_list=[8])
+    pulser.cycle_benchmark(L=1, m_list=[2])
      # Print circuits
     for i, (legend, qc) in enumerate(zip(pulser.legends_l_k_m, pulser.circuits)):
         print(i, '(l, k, m):', legend)
@@ -237,34 +197,24 @@ def main_debug_back_to_z():
         if not(i == 15 or True):
             continue
         print('\n\ncircuit', i)
-        engineered_gates = pulser.back_to_z(qc)
+        engineered_gates = pulser.back_to_z(qc, verbose=True)
         qc.append(engineered_gates[0], [0])
         qc.append(engineered_gates[1], [1])
         print('circuits from main')
+        print('\ncircuit')
         print(qc)
-        counts = pulser.get_counts(qc)
         print(qc.qasm())
+        print('\ntranspiled circuit')
+        print(qk.transpile(qc, basis_gates=['rxx', 'rx', 'ry', 'id']))
+        print(qk.transpile(qc, basis_gates=['rxx', 'rx', 'ry', 'id']).qasm())
+        counts = pulser.get_counts(qc)
         print('counts from main', counts)
+
         # plot_bloch_multivector(qc)
         # plt.show()
 
-def main_nonconsistent_epulses():
-    my_pulser = Pulser()
-    your_pulser = Pulser()
-
-    my_pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=False)
-    your_pulser.cycle_benchmark(L=1, m_list=[4], final_pulses=True)
-    epulses = your_pulser.back_to_z(your_pulser.circuits[0])
-
-    qc = qk.QuantumCircuit(2)
-    qc.append(epulses[0],[0])
-    qc.append(epulses[1],[1])
-    print(qc)
-
-    print(my_pulser.circuits[0])
-    print(your_pulser.circuits[0])
-
 
 if __name__ == '__main__':
-    main_debug_back_to_z()
+    main_cycle_benchmark()
+
 
