@@ -60,6 +60,8 @@ class Pulser:
     # https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
         r = np.linalg.norm(vector_car)
         x, y, z = vector_car
+        if r < 0.00001:
+            return np.zeros(shape=(3,))
         theta = np.arccos(z / r)
         if x > 0:
             phi = np.arctan(y/ x)
@@ -92,6 +94,9 @@ class Pulser:
     def back_to_z(self, qc, verbose=False):
         """ Go back to north or south poles.
 
+        Pululates `self.final_states` with random choices 
+        0 = |0>, 1 = |1>
+
         params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
         """
@@ -100,6 +105,7 @@ class Pulser:
             dest_vector = np.array([0, 0, -1])
         else:
             dest_vector = np.array([0, 0, 1])
+        self.final_states.append(final_state)
         
         engineered_gates = [None for _ in range(2)]
         subsystems = self.get_subsystems(self.get_statevector(qc))
@@ -117,7 +123,6 @@ class Pulser:
                     print('rotation_axis', rotation_axis)
                     print('anti-parallel --> pi flip')
             else:
-                
                 rotation_angle = np.arcsin(np.linalg.norm(rotation_axis) / np.linalg.norm(bloch_vector) / np.linalg.norm(dest_vector))
                 r, theta, phi = self.cartesian_to_spherical(rotation_axis)
                 if verbose:
@@ -154,19 +159,25 @@ class Pulser:
         # Paulis to choose from:
         paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
 
-        # Assemble and store circuits
+        # Assemble and store circuits and legends
         for l in range(L):
             for k, (Bi, Bj) in enumerate(B_combinations):
                 for m in m_list:
                     qc = qk.QuantumCircuit(2)
                     qc.append(Bi, [0])
                     qc.append(Bj, [1])
-                    qc.append(self.rng.choice(paulis), [0])
-                    qc.append(self.rng.choice(paulis), [1])
+                    i = self.rng.choice([idx for idx in range(len(paulis))])
+                    j = self.rng.choice([idx for idx in range(len(paulis))])
+                    Ri, Rj = paulis[i], paulis[j]
+                    qc.append(Ri, [0])
+                    qc.append(Rj, [1])
                     for _ in range(m):
+                        i = self.rng.choice([idx for idx in range(len(paulis))])
+                        j = self.rng.choice([idx for idx in range(len(paulis))])
+                        Ri, Rj = paulis[i], paulis[j]
+                        qc.append(Ri, [0])
+                        qc.append(Rj, [1])
                         qc.append(RXXGate(pi/2), [0, 1])
-                        qc.append(self.rng.choice(paulis), [0])
-                        qc.append(self.rng.choice(paulis), [1])
                     # calculate and append the engineered gates
                     if final_pulses:
                         engineered_gates = self.back_to_z(qc)
@@ -209,8 +220,12 @@ def main_debug_back_to_z():
         # plot_bloch_multivector(qc)
         # plt.show()
 
+def main_debug_compile():
+    pulser = Pulser()
+    pulser.cycle_benchmark(m_list=[4], L=1)
+
 
 if __name__ == '__main__':
-    main_cycle_benchmark()
+    main_debug_compile()
 
 

@@ -38,5 +38,6 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
 - [x] Debug the MS gate!!
 - [x] Make engineered pulses use multiples of $\pi$ instead of long decimal numbers
+- [ ] Function to transform `U3Gate`s in minimum set of`RGate`s
 - [ ] `compiler` to produce hfgui / artiq compatible pulses
 - [ ] `decompiler` to load the pulses into gates
