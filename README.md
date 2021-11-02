@@ -35,11 +35,17 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Introduce MS gate
 - [x] Calculate the state
 - [x] `back_to_z()`  (engineered pulse)
-- [x] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
+  - [x] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
 - [x] Debug the MS gate!!
 - [x] Make engineered pulses use multiples of $\pi$ instead of long decimal numbers
 - [x] `compiler` to produce hfgui / ~~artiq~~ compatible pulses
+  - [ ] write `phi` as a function of `scan_pi`
+  - [ ] write pulses into files (use `pathlib`)
+  - [ ] compile single-ion circuits (global or MMSB pulses?)
 - [ ] `decompiler` to load the pulses into gatesqiskit-terra 0.18.3
+
+### Wishlist
+
 - [ ] Function to transform `U3Gate`s in minimum set of`RGate`s
 
 
