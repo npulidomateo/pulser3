@@ -38,6 +38,21 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
 - [x] Debug the MS gate!!
 - [x] Make engineered pulses use multiples of $\pi$ instead of long decimal numbers
+- [x] `compiler` to produce hfgui / ~~artiq~~ compatible pulses
+- [ ] `decompiler` to load the pulses into gatesqiskit-terra 0.18.3
 - [ ] Function to transform `U3Gate`s in minimum set of`RGate`s
-- [ ] `compiler` to produce hfgui / artiq compatible pulses
-- [ ] `decompiler` to load the pulses into gates
+
+
+## Qiskit version
+
+| module                    | version   |
+|---------------------------|-----------|
+| qiskit-aer                | 0.9.1     |
+| qiskit-ignis              | 0.6.0     |
+| qiskit-ibmq-provider      | 0.17.0    |
+| qiskit-aqua               | 0.9.5     |
+| qiskit                    | 0.31.0    |
+| qiskit-nature             | None      |
+| qiskit-finance            | None      |
+| qiskit-optimization       | None      |
+| qiskit-machine-learning   | None      |

@@ -21,7 +21,6 @@ from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, 
 from qiskit.quantum_info import partial_trace
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
-import matplotlib.pyplot as plt
 
 # Alias numpy pi for convenience
 pi = np.pi
@@ -50,6 +49,10 @@ class Pulser:
         self.circuits = []
         self.legends_l_k_m = []
         self.final_states = []
+        hfgui_sequences = []
+
+        # Flags
+        self.do_ms_gate = True
 
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
@@ -175,9 +178,9 @@ class Pulser:
                         i = self.rng.choice([idx for idx in range(len(paulis))])
                         j = self.rng.choice([idx for idx in range(len(paulis))])
                         Ri, Rj = paulis[i], paulis[j]
+                        qc.append(RXXGate(pi/2), [0, 1])
                         qc.append(Ri, [0])
                         qc.append(Rj, [1])
-                        qc.append(RXXGate(pi/2), [0, 1])
                     # calculate and append the engineered gates
                     if final_pulses:
                         engineered_gates = self.back_to_z(qc)
@@ -185,6 +188,118 @@ class Pulser:
                         qc.append(engineered_gates[1], [1])
                     self.circuits.append(qc)
                     self.legends_l_k_m.append((l, k, m))
+
+    @staticmethod
+    def get_from_parenthesis(text):
+        sentence = []
+        word = ''
+        rec = False
+        for character in text:
+            if character == '(':
+                rec = True
+            elif character == ',':
+                sentence.append(word)
+                word = ''
+            elif character == ')':
+                if word == '':
+                    sentence = ['', '']
+                else:
+                    sentence.append(word)
+                break
+            elif rec:
+                word += character
+        return sentence
+
+
+    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id']):
+
+        tqc = qk.transpile(qc, basis_gates=basis_gates)
+
+        print(qc)
+        print(tqc)
+        
+        
+        # Transpile and get qasm instructions
+        text = tqc.qasm()
+        ignore = ['\n']
+        qasm_instructions = []
+        sentence = ''
+        for c in text:
+            if c == ';':
+                qasm_instructions.append(sentence)
+                sentence = ''
+            elif c not in ignore:
+                sentence += c
+        if sentence != '':
+            qasm_instructions.append(sentence)
+
+        # Get instructions after `qreg`
+        high_level_index = None
+        for i, raw_instruction in enumerate(qasm_instructions):
+            if 'qreg' in raw_instruction:
+                high_level_index = i + 1
+                break
+        high_level_instructions = qasm_instructions[high_level_index:]
+        print(high_level_instructions)
+
+        # Parse the high_level_instructions, reorder, insert transport
+        #                                                   and assemble pulses
+        hfgui_pulses = []
+        qubit_0_pulses = []
+        qubit_1_pulses = []
+        
+        print('instructions')
+        for instruction in high_level_instructions:
+            print(instruction)
+            #continue
+            
+            if 'q[0]' in instruction and 'q[1]' in instruction:
+                if qubit_0_pulses != []:
+                    hfgui_pulses.append('inline ion_1_potential();')
+                    for pulse in qubit_0_pulses:
+                        hfgui_pulses.append(pulse)
+                    qubit_0_pulses = []
+                if qubit_1_pulses != []:
+                    hfgui_pulses.append('inline ion_2_potential();')
+                    for pulse in qubit_1_pulses:
+                        hfgui_pulses.append(pulse)
+                    qubit_1_pulses = []
+                if self.do_ms_gate:
+                    hfgui_pulses.append('inline ms_potential();')
+                    hfgui_pulses.append('inline ms_gate(0.);')
+                else:
+                    hfgui_pulses.append('inline identity();')
+            elif 'id' in instruction:
+                continue
+            elif 'q[0]' in instruction:
+                theta, phi = self.get_from_parenthesis(instruction)
+                pulse = 'rot_1(%s, %s)' % (phi, theta)
+                qubit_0_pulses.append(pulse)
+            elif 'q[1]' in instruction:
+                theta, phi = self.get_from_parenthesis(instruction)
+                pulse = 'rot_2(%s, %s)' % (phi, theta)
+                qubit_1_pulses.append(pulse)
+        
+        if qubit_0_pulses != []:
+            hfgui_pulses.append('inline ion_1_potential();')
+            for pulse in qubit_0_pulses:
+                hfgui_pulses.append(pulse)
+            qubit_0_pulses = []
+        if qubit_1_pulses != []:
+            hfgui_pulses.append('inline ion_2_potential();')
+            for pulse in qubit_1_pulses:
+                hfgui_pulses.append(pulse)
+            qubit_1_pulses = []
+
+        # Debug
+        for pulse in hfgui_pulses:
+            print(pulse)
+
+
+    def compile(self):
+        self.compile_circuit(self.circuits[0])
+
+
 
 
 def main_cycle_benchmark():
@@ -222,7 +337,8 @@ def main_debug_back_to_z():
 
 def main_debug_compile():
     pulser = Pulser()
-    pulser.cycle_benchmark(m_list=[4], L=1)
+    pulser.cycle_benchmark(m_list=[8], L=1)
+    pulser.compile()
 
 
 if __name__ == '__main__':
