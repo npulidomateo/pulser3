@@ -190,6 +190,67 @@ class Pulser:
                     self.legends_l_k_m.append((l, k, m))
 
     @staticmethod
+    def SIA_pitime(word, ion):
+        """Converts angles to SIA pitime for a given ion"""
+
+        # If pi in word, just usbtitude with right pitime
+        if 'pi' in word:
+            new_word = ''
+            i = 0        
+            while i <= len(word)-1:
+                c = word[i]
+                if c == 'p':
+                    new_word += 'scan_pi_%d' % ion
+                    i += 1
+                elif c != 'i':
+                    new_word += c
+                    i += 1
+                else:
+                    i += 1
+
+        # If pi not in word, transform into pi units and append correct pitime
+        else:
+            angle = float(word)
+            angle_in_pi_units = angle / pi
+            new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion)
+        return new_word
+
+    @staticmethod
+    def put_the_dot(word='pi_0 * 23.456/4 * (pi_1/pi_0) / 4. / *(42.0 + 34) * pi3'):
+        """Add a dot to the end of floats in expressions to make hfgui smile"""
+        
+        separators = ' +-/*()'
+        digits = '.0123456789'
+        tainted = False
+        new_word = ''
+        number = ''
+        
+        # Parse the word
+        for c in word:
+            if c in separators and number != '':
+                if '.' not in number:
+                    number += '.'
+                new_word += number
+                new_word += c
+                number = ''
+            elif c in separators and number == '':
+                tainted = False
+                new_word += c
+            elif c in digits and not tainted:
+                number += c
+            else:
+                new_word += c
+                tainted = True
+        # Catch the last number
+        if number != '':
+            if '.' not in number:
+                number += '.'
+            new_word += number
+
+        return new_word
+            
+
+    @staticmethod
     def get_from_parenthesis(text):
         sentence = []
         word = ''
@@ -213,11 +274,9 @@ class Pulser:
 
     def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id']):
 
+        # Transpile to something compatible with our system
         tqc = qk.transpile(qc, basis_gates=basis_gates)
-
-        print(qc)
         print(tqc)
-        
         
         # Transpile and get qasm instructions
         text = tqc.qasm()
@@ -240,19 +299,16 @@ class Pulser:
                 high_level_index = i + 1
                 break
         high_level_instructions = qasm_instructions[high_level_index:]
-        print(high_level_instructions)
 
-        # Parse the high_level_instructions, reorder, insert transport
-        #                                                   and assemble pulses
+        # Parse high_level_instructions, reorder, transport, translate to pulses
         hfgui_pulses = []
         qubit_0_pulses = []
         qubit_1_pulses = []
         
-        print('instructions')
+        # Translate instructions to hfgui pulses
         for instruction in high_level_instructions:
-            print(instruction)
-            #continue
             
+            # MS Gates
             if 'q[0]' in instruction and 'q[1]' in instruction:
                 if qubit_0_pulses != []:
                     hfgui_pulses.append('inline ion_1_potential();')
@@ -269,17 +325,30 @@ class Pulser:
                     hfgui_pulses.append('inline ms_gate(0.);')
                 else:
                     hfgui_pulses.append('inline identity();')
+            
+            # Identities
             elif 'id' in instruction:
                 continue
+
+            # SIA qubit 0
             elif 'q[0]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                phi = self.put_the_dot(phi)
+                theta = self.SIA_pitime(theta, ion=0)
+                theta = self.put_the_dot(theta)
                 pulse = 'rot_1(%s, %s)' % (phi, theta)
                 qubit_0_pulses.append(pulse)
+            
+            # SIA qubit 1
             elif 'q[1]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                phi = self.put_the_dot(phi)
+                theta = self.SIA_pitime(theta, ion=1)
+                theta = self.put_the_dot(theta)
                 pulse = 'rot_2(%s, %s)' % (phi, theta)
                 qubit_1_pulses.append(pulse)
         
+        # Catch the pulses after the last two-qubit gate
         if qubit_0_pulses != []:
             hfgui_pulses.append('inline ion_1_potential();')
             for pulse in qubit_0_pulses:
@@ -290,16 +359,15 @@ class Pulser:
             for pulse in qubit_1_pulses:
                 hfgui_pulses.append(pulse)
             qubit_1_pulses = []
-
-        # Debug
-        for pulse in hfgui_pulses:
-            print(pulse)
+        
+        return hfgui_pulses
 
 
     def compile(self):
-        self.compile_circuit(self.circuits[0])
-
-
+        
+        hfgui_pulses = self.compile_circuit(self.circuits[0])
+        for pulse in hfgui_pulses:
+            print(pulse)
 
 
 def main_cycle_benchmark():

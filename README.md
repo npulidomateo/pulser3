@@ -39,9 +39,12 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Debug the MS gate!!
 - [x] Make engineered pulses use multiples of $\pi$ instead of long decimal numbers
 - [x] `compiler` to produce hfgui / ~~artiq~~ compatible pulses
-  - [ ] write `phi` as a function of `scan_pi`
+  - [x] write `theta` as a function of `scan_pi`
+    - [x] hfgui wants "." after floating point numbers --> `put_the_dot()`
+    - [x] different ions have different pitimes `scan_pi_0` / `scan_pi_1`
+  - [ ] add the ACZS correction to SIA pulses
   - [ ] write pulses into files (use `pathlib`)
-  - [ ] compile single-ion circuits (global or MMSB pulses?)
+  - [ ] ~~compile single-ion circuits (global or MMSB pulses?)~~
 - [ ] `decompiler` to load the pulses into gatesqiskit-terra 0.18.3
 
 ### Wishlist
