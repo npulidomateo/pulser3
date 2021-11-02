@@ -21,6 +21,8 @@ from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, 
 from qiskit.quantum_info import partial_trace
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
+import pathlib
+import os
 
 # Alias numpy pi for convenience
 pi = np.pi
@@ -49,10 +51,9 @@ class Pulser:
         self.circuits = []
         self.legends_l_k_m = []
         self.final_states = []
-        hfgui_sequences = []
+        self.hfgui_sequences = []
 
-        # Flags
-        self.do_ms_gate = True
+        aczs_comp = True
 
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
@@ -150,7 +151,7 @@ class Pulser:
         return engineered_gates
 
 
-    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True):
+    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True):
 
         # Prepare basis change combinations
         B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]
@@ -158,6 +159,8 @@ class Pulser:
         for Bi in B_operators:
             for Bj in B_operators:
                 B_combinations.append((Bi, Bj))
+        # Don't use last combination (I, I)
+        B_combinations = B_combinations[:-1]
 
         # Paulis to choose from:
         paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
@@ -178,7 +181,10 @@ class Pulser:
                         i = self.rng.choice([idx for idx in range(len(paulis))])
                         j = self.rng.choice([idx for idx in range(len(paulis))])
                         Ri, Rj = paulis[i], paulis[j]
-                        qc.append(RXXGate(pi/2), [0, 1])
+                        if do_ms_gate:
+                            qc.append(RXXGate(pi/2), [0, 1])
+                        else:
+                            qc.append(IGate(), [0, 1])
                         qc.append(Ri, [0])
                         qc.append(Rj, [1])
                     # calculate and append the engineered gates
@@ -272,11 +278,10 @@ class Pulser:
         return sentence
 
 
-    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id']):
+    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True):
 
         # Transpile to something compatible with our system
         tqc = qk.transpile(qc, basis_gates=basis_gates)
-        print(tqc)
         
         # Transpile and get qasm instructions
         text = tqc.qasm()
@@ -306,6 +311,7 @@ class Pulser:
         qubit_1_pulses = []
         
         # Translate instructions to hfgui pulses
+        n_ms_gates = 0
         for instruction in high_level_instructions:
             
             # MS Gates
@@ -320,9 +326,10 @@ class Pulser:
                     for pulse in qubit_1_pulses:
                         hfgui_pulses.append(pulse)
                     qubit_1_pulses = []
-                if self.do_ms_gate:
+                if do_ms_gate:
                     hfgui_pulses.append('inline ms_potential();')
                     hfgui_pulses.append('inline ms_gate(0.);')
+                    n_ms_gates+=1
                 else:
                     hfgui_pulses.append('inline identity();')
             
@@ -333,6 +340,8 @@ class Pulser:
             # SIA qubit 0
             elif 'q[0]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                if aczs_comp:
+                    phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=0)
                 theta = self.put_the_dot(theta)
@@ -342,6 +351,8 @@ class Pulser:
             # SIA qubit 1
             elif 'q[1]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                if aczs_comp:
+                    phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=1)
                 theta = self.put_the_dot(theta)
@@ -363,11 +374,28 @@ class Pulser:
         return hfgui_pulses
 
 
-    def compile(self):
-        
-        hfgui_pulses = self.compile_circuit(self.circuits[0])
-        for pulse in hfgui_pulses:
-            print(pulse)
+    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True):
+        for circuit in self.circuits:
+            hfgui_pulses = self.compile_circuit(circuit, basis_gates=basis_gates, do_ms_gate=do_ms_gate, aczs_comp=aczs_comp)
+            self.hfgui_sequences.append(hfgui_pulses)
+
+
+    def write_files(self, out_folder='sequences', remove_old_files=True):
+        out_folder = pathlib.Path(out_folder)
+        if not os.path.isdir(out_folder):
+            os.mkdir(out_folder)
+        elif remove_old_files:
+            for fname in os.listdir(out_folder):
+                fname = pathlib.Path(fname)
+                os.remove(out_folder/fname)
+
+        for i in range(len(self.circuits)):
+            l, k, m = self.legends_l_k_m[i]
+            final_state = self.final_states[i]
+            filename = pathlib.Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
+            with open(out_folder/filename, 'w') as f:
+                for pulse in self.hfgui_sequences[i]:
+                    print(pulse, file=f)
 
 
 def main_cycle_benchmark():
@@ -405,11 +433,21 @@ def main_debug_back_to_z():
 
 def main_debug_compile():
     pulser = Pulser()
-    pulser.cycle_benchmark(m_list=[8], L=1)
+    pulser.cycle_benchmark(m_list=[4], L=1)
     pulser.compile()
+    for i, pulse_sequence in enumerate(pulser.hfgui_sequences):
+        print('circuit', i)
+        print(len(pulse_sequence))
+        print(pulse_sequence)
+        print()
 
+def main():
+    pulser = Pulser()
+    pulser.cycle_benchmark(m_list=[4, 8], L=5)
+    pulser.compile()
+    pulser.write_files()
 
 if __name__ == '__main__':
-    main_debug_compile()
+    main()
 
 

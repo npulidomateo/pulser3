@@ -33,6 +33,7 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 
 - [x] visualize sequences of pulses ~~using `matplotlib`~~
 - [x] Introduce MS gate
+- [x] Allow swith between MS gate and Identity (for debugging)
 - [x] Calculate the state
 - [x] `back_to_z()`  (engineered pulse)
   - [x] Fix `back_to_z()` not giving the same gates if run from `cycle_benchmark()` and externally (see `delme.py`)
@@ -42,8 +43,8 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
   - [x] write `theta` as a function of `scan_pi`
     - [x] hfgui wants "." after floating point numbers --> `put_the_dot()`
     - [x] different ions have different pitimes `scan_pi_0` / `scan_pi_1`
-  - [ ] add the ACZS correction to SIA pulses
-  - [ ] write pulses into files (use `pathlib`)
+  - [x] add the ACZS correction to SIA pulses
+  - [x] write pulses into files (use `pathlib`)
   - [ ] ~~compile single-ion circuits (global or MMSB pulses?)~~
 - [ ] `decompiler` to load the pulses into gatesqiskit-terra 0.18.3
 
