@@ -53,8 +53,6 @@ class Pulser:
         self.final_states = []
         self.hfgui_sequences = []
 
-        aczs_comp = True
-
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
 
@@ -152,6 +150,7 @@ class Pulser:
 
 
     def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True):
+        self.circuits = []  # Reset circuits
 
         # Prepare basis change combinations
         B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]

@@ -46,11 +46,15 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
   - [x] add the ACZS correction to SIA pulses
   - [x] write pulses into files (use `pathlib`)
   - [ ] ~~compile single-ion circuits (global or MMSB pulses?)~~
+- [ ] Use multiple cores
 - [ ] `decompiler` to load the pulses into gatesqiskit-terra 0.18.3
 
 ### Wishlist
 
 - [ ] Function to transform `U3Gate`s in minimum set of`RGate`s
+- [ ] Read circuits from files
+- [ ] Write jupyter tutorial 
+  - [ ] Include conda environment file
 
 
 ## Qiskit version
