@@ -23,6 +23,7 @@ from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
 import pathlib
 import os
+import warnings
 
 # Alias numpy pi for convenience
 pi = np.pi
@@ -279,10 +280,15 @@ class Pulser:
 
     def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True):
 
-        # Transpile to something compatible with our system
-        tqc = qk.transpile(qc, basis_gates=basis_gates)
+       
+        # https://stackoverflow.com/a/17654868
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=UserWarning)
+    
+            # Transpile to something compatible with our system
+            tqc = qk.transpile(qc, basis_gates=basis_gates)
         
-        # Transpile and get qasm instructions
+        # Get qasm instructions
         text = tqc.qasm()
         ignore = ['\n']
         qasm_instructions = []
@@ -315,16 +321,22 @@ class Pulser:
             
             # MS Gates
             if 'q[0]' in instruction and 'q[1]' in instruction:
+
+                if 'rxx' not in instruction:
+                    continue
+                
                 if qubit_0_pulses != []:
                     hfgui_pulses.append('inline ion_1_potential();')
                     for pulse in qubit_0_pulses:
                         hfgui_pulses.append(pulse)
                     qubit_0_pulses = []
+                
                 if qubit_1_pulses != []:
                     hfgui_pulses.append('inline ion_2_potential();')
                     for pulse in qubit_1_pulses:
                         hfgui_pulses.append(pulse)
                     qubit_1_pulses = []
+                
                 if do_ms_gate:
                     hfgui_pulses.append('inline ms_potential();')
                     hfgui_pulses.append('inline ms_gate(0.);')
