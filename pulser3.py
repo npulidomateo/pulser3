@@ -53,6 +53,7 @@ class Pulser:
         self.legends_l_k_m = []
         self.final_states = []
         self.hfgui_sequences = []
+        self.hfgui_circuits = []
 
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
@@ -278,18 +279,20 @@ class Pulser:
         return sentence
 
 
-    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True):
-
+    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0):
        
-        # https://stackoverflow.com/a/17654868
-        with warnings.catch_warnings():
-            warnings.filterwarnings('ignore', category=UserWarning)
-    
-            # Transpile to something compatible with our system
-            tqc = qk.transpile(qc, basis_gates=basis_gates)
+        # Transpile to something compatible with our system
+        if transpile:
+            # https://stackoverflow.com/a/17654868
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', category=UserWarning)
+
+                tqc = qk.transpile(qc, basis_gates=basis_gates, optimization_level=transpile_optimization)
+                print('\ncompile_circtuit')
+                print(tqc)
         
         # Get qasm instructions
-        text = tqc.qasm()
+        text = tqc.copy().qasm()  # .copy because .qasm() changes the gate names
         ignore = ['\n']
         qasm_instructions = []
         sentence = ''
@@ -382,30 +385,70 @@ class Pulser:
                 hfgui_pulses.append(pulse)
             qubit_1_pulses = []
         
-        return hfgui_pulses
+        return hfgui_pulses, tqc
 
 
-    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True):
+    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0):
         for circuit in self.circuits:
-            hfgui_pulses = self.compile_circuit(circuit, basis_gates=basis_gates, do_ms_gate=do_ms_gate, aczs_comp=aczs_comp)
+            hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization)
             self.hfgui_sequences.append(hfgui_pulses)
+            self.hfgui_circuits.append(tqc)
 
 
-    def write_files(self, out_folder='sequences', remove_old_files=True):
+    def write_files(self, out_folder='sequences', remove_old_files=False, prefix='', write_circuits=False):
+        
+        # Allow empty prefix to be nice
+        if prefix != '':
+            prefix += '_'
+       
+        # Create output folder 
         out_folder = pathlib.Path(out_folder)
         if not os.path.isdir(out_folder):
             os.mkdir(out_folder)
+        
+        # Remove file inside output folder
         elif remove_old_files:
             for fname in os.listdir(out_folder):
                 fname = pathlib.Path(fname)
-                os.remove(out_folder/fname)
-
-        for i in range(len(self.circuits)):
-            l, k, m = self.legends_l_k_m[i]
-            final_state = self.final_states[i]
-            filename = pathlib.Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
+                if not os.path.isdir(fname):
+                    os.remove(out_folder/fname)
+    
+        for i, sequence in enumerate(self.hfgui_sequences):
+            
+            # Check if cycle benchmarking was done
+            if self.legends_l_k_m != []:
+                l, k, m = self.legends_l_k_m[i]
+                final_state = self.final_states[i]
+                filename = pathlib.Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
+            
+            # Just assemble filenames using prefix
+            else: 
+                if self.final_states != []:
+                    final_state = self.final_states[i]
+                    filename = pathlib.Path('%s%03d_f_%d.dc' % (prefix, i, final_state))
+                else:
+                    filename = pathlib.Path('%s%03d.dc' % (prefix, i))
+                
+            # Write files
             with open(out_folder/filename, 'w') as f:
-                for pulse in self.hfgui_sequences[i]:
+
+                # Write circuit as comment
+                if write_circuits:
+                    circuit_text = str(self.hfgui_circuits[i].draw(output='text'))
+                    line = ''
+                    for c in circuit_text:
+                        if c in ['\n', '\r']:
+                            print('//' + line)
+                            print('//' + line, file=f)
+                            line = ''
+                        else:
+                            line += c
+                    if line != '':
+                        print('//' + line)
+                        print('//' + line, file=f)
+
+                # Write pulses
+                for pulse in sequence:
                     print(pulse, file=f)
 
 
