@@ -288,8 +288,6 @@ class Pulser:
                 warnings.filterwarnings('ignore', category=UserWarning)
 
                 tqc = qk.transpile(qc, basis_gates=basis_gates, optimization_level=transpile_optimization)
-                print('\ncompile_circtuit')
-                print(tqc)
         
         # Get qasm instructions
         text = tqc.copy().qasm()  # .copy because .qasm() changes the gate names
@@ -354,7 +352,7 @@ class Pulser:
             # SIA qubit 0
             elif 'q[0]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
-                if aczs_comp:
+                if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=0)
@@ -365,7 +363,7 @@ class Pulser:
             # SIA qubit 1
             elif 'q[1]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
-                if aczs_comp:
+                if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=1)
@@ -395,7 +393,7 @@ class Pulser:
             self.hfgui_circuits.append(tqc)
 
 
-    def write_files(self, out_folder='sequences', remove_old_files=False, prefix='', write_circuits=False):
+    def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=False):
         
         # Allow empty prefix to be nice
         if prefix != '':
@@ -416,18 +414,22 @@ class Pulser:
         for i, sequence in enumerate(self.hfgui_sequences):
             
             # Check if cycle benchmarking was done
-            if self.legends_l_k_m != []:
+            if self.legends_l_k_m != [] and filenames is None:
                 l, k, m = self.legends_l_k_m[i]
                 final_state = self.final_states[i]
                 filename = pathlib.Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
             
-            # Just assemble filenames using prefix
-            else: 
+            # Assemble filenames using prefix and automatic counter
+            elif filenames is None: 
                 if self.final_states != []:
                     final_state = self.final_states[i]
                     filename = pathlib.Path('%s%03d_f_%d.dc' % (prefix, i, final_state))
                 else:
                     filename = pathlib.Path('%s%03d.dc' % (prefix, i))
+            
+            # Use specified filename list
+            else:
+                filename = filenames[i]
                 
             # Write files
             with open(out_folder/filename, 'w') as f:
@@ -438,62 +440,17 @@ class Pulser:
                     line = ''
                     for c in circuit_text:
                         if c in ['\n', '\r']:
-                            print('//' + line)
                             print('//' + line, file=f)
                             line = ''
                         else:
                             line += c
                     if line != '':
-                        print('//' + line)
                         print('//' + line, file=f)
 
                 # Write pulses
                 for pulse in sequence:
                     print(pulse, file=f)
 
-
-def main_cycle_benchmark():
-    pulser = Pulser()
-    pulser.cycle_benchmark(L=1, m_list=[2])
-     # Print circuits
-    for i, (legend, qc) in enumerate(zip(pulser.legends_l_k_m, pulser.circuits)):
-        print(i, '(l, k, m):', legend)
-        # print(qc)
-        print(pulser.get_counts(qc))
-
-
-def main_debug_back_to_z():
-    pulser = Pulser()
-    pulser.cycle_benchmark(L=1, m_list=[2], final_pulses=False)
-    for i, qc in enumerate(pulser.circuits):
-        if not(i == 15 or True):
-            continue
-        print('\n\ncircuit', i)
-        engineered_gates = pulser.back_to_z(qc, verbose=True)
-        qc.append(engineered_gates[0], [0])
-        qc.append(engineered_gates[1], [1])
-        print('circuits from main')
-        print('\ncircuit')
-        print(qc)
-        print(qc.qasm())
-        print('\ntranspiled circuit')
-        print(qk.transpile(qc, basis_gates=['rxx', 'rx', 'ry', 'id']))
-        print(qk.transpile(qc, basis_gates=['rxx', 'rx', 'ry', 'id']).qasm())
-        counts = pulser.get_counts(qc)
-        print('counts from main', counts)
-
-        # plot_bloch_multivector(qc)
-        # plt.show()
-
-def main_debug_compile():
-    pulser = Pulser()
-    pulser.cycle_benchmark(m_list=[4], L=1)
-    pulser.compile()
-    for i, pulse_sequence in enumerate(pulser.hfgui_sequences):
-        print('circuit', i)
-        print(len(pulse_sequence))
-        print(pulse_sequence)
-        print()
 
 def main():
     pulser = Pulser()
