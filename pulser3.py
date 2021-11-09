@@ -287,7 +287,6 @@ class Pulser:
             # https://stackoverflow.com/a/17654868
             with warnings.catch_warnings():
                 warnings.filterwarnings('ignore', category=UserWarning)
-                warnings.filterwarnings('ignore', category=DeprecationWarning)
 
                 tqc = qk.transpile(qc, basis_gates=basis_gates, optimization_level=transpile_optimization)
         
@@ -390,21 +389,25 @@ class Pulser:
 
     def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, n_cores=4):
 
-        # Use multiprocessing
-        if n_cores > 0:
-            compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization) for circuit in self.circuits]
-            with Pool(n_cores) as p:
-                result = p.starmap(self.compile_circuit, compile_circuit_args)
-            for sub_result in result:
-                self.hfgui_circuits.append(sub_result[1])
-                self.hfgui_sequences.append(sub_result[0])
+        # Get rid of (SymPy) deprecation warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-        # Do not use multiprocessing
-        else:
-            for circuit in self.circuits:
-                hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization)
-                self.hfgui_sequences.append(hfgui_pulses)
-                self.hfgui_circuits.append(tqc)
+            # Use multiprocessing
+            if n_cores > 0:
+                compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization) for circuit in self.circuits]
+                with Pool(n_cores) as p:
+                    result = p.starmap(self.compile_circuit, compile_circuit_args)
+                for sub_result in result:
+                    self.hfgui_circuits.append(sub_result[1])
+                    self.hfgui_sequences.append(sub_result[0])
+
+            # Do not use multiprocessing
+            else:
+                for circuit in self.circuits:
+                    hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization)
+                    self.hfgui_sequences.append(hfgui_pulses)
+                    self.hfgui_circuits.append(tqc)
 
 
     def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=False):
