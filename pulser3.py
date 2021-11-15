@@ -100,7 +100,7 @@ class Pulser:
         """ Go back to north or south poles.
 
         Pululates `self.final_states` with random choices 
-        0 = |0>, 1 = |1>
+        0 = |00>, 1 = |11>
 
         params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
