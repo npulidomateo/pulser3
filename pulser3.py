@@ -197,31 +197,23 @@ class Pulser:
                     self.circuits.append(qc)
                     self.legends_l_k_m.append((l, k, m))
 
+
     @staticmethod
     def SIA_pitime(word, ion):
         """Converts angles to SIA pitime for a given ion"""
 
-        # If pi in word, just usbtitude with right pitime
-        if 'pi' in word:
-            new_word = ''
-            i = 0        
-            while i <= len(word)-1:
-                c = word[i]
-                if c == 'p':
-                    new_word += 'scan_pi_%d' % ion
-                    i += 1
-                elif c != 'i':
-                    new_word += c
-                    i += 1
-                else:
-                    i += 1
+        # get angle from expression
+        exec('expression = ' + word, globals())
 
-        # If pi not in word, transform into pi units and append correct pitime
-        else:
-            angle = float(word)
-            angle_in_pi_units = angle / pi
-            new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion)
+        # get equivalent positive angle
+        angle = expression
+        if angle < 0:
+            angle = 2*pi + angle
+
+        angle_in_pi_units = angle / pi
+        new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion)
         return new_word
+
 
     @staticmethod
     def put_the_dot(word='pi_0 * 23.456/4 * (pi_1/pi_0) / 4. / *(42.0 + 34) * pi3'):
@@ -358,7 +350,7 @@ class Pulser:
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=0)
                 theta = self.put_the_dot(theta)
-                pulse = 'rot_1(%s, %s)' % (phi, theta)
+                pulse = 'inline rot_1(%s, %s);' % (phi, theta)
                 qubit_0_pulses.append(pulse)
             
             # SIA qubit 1
@@ -369,7 +361,7 @@ class Pulser:
                 phi = self.put_the_dot(phi)
                 theta = self.SIA_pitime(theta, ion=1)
                 theta = self.put_the_dot(theta)
-                pulse = 'rot_2(%s, %s)' % (phi, theta)
+                pulse = 'inline rot_2(%s, %s);' % (phi, theta)
                 qubit_1_pulses.append(pulse)
         
         # Catch the pulses after the last two-qubit gate
