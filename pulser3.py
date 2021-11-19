@@ -21,7 +21,7 @@ from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, 
 from qiskit.quantum_info import partial_trace
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
-import pathlib
+from pathlib import Path
 import os
 import warnings
 from multiprocessing import Pool
@@ -269,6 +269,15 @@ class Pulser:
                 break
             elif rec:
                 word += character
+
+        # remove the aczs compensation phase
+        word = ''
+        first_arg = sentence[0]
+        for c in first_arg:
+            if c in [' ', '+']:
+                sentence[0] = word
+            else:
+                    word += c
         return sentence
 
 
@@ -391,8 +400,8 @@ class Pulser:
                 with Pool(n_cores) as p:
                     result = p.starmap(self.compile_circuit, compile_circuit_args)
                 for sub_result in result:
-                    self.hfgui_circuits.append(sub_result[1])
                     self.hfgui_sequences.append(sub_result[0])
+                    self.hfgui_circuits.append(sub_result[1])
 
             # Do not use multiprocessing
             else:
@@ -402,21 +411,52 @@ class Pulser:
                     self.hfgui_circuits.append(tqc)
 
 
-    def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=False):
+    def decompile_sequence(self, sequence):
+        qc = qk.QuantumCircuit(2)
+        for pulse in sequence:
+            # Get qubit_idx
+            if 'ms_gate' in pulse:
+                qubit_idx = 2
+            elif 'rot_1' in pulse:
+                qubit_idx = 0
+            elif 'rot_2' in pulse:
+                qubit_idx = 1
+            else:
+                continue
+
+            if qubit_idx == 2:
+                qc.rxx(pi/2, 0, 1)
+            else:
+                phi, theta = self.get_from_parenthesis(pulse)
+                scan_pi_0 = pi
+                scan_pi_1 = pi
+                exec('theta_expr = ' + theta ,locals(), globals())
+                exec('phi_expr = ' + phi, locals() ,globals())
+                theta = theta_expr
+                phi = phi_expr
+                qc.r(theta, phi, qubit_idx)
+        return qc
+
+    def decompile(self, n_cores=4):
+        with Pool(n_cores) as p:
+            self.circuits = p.map(self.decompile_sequence, self.hfgui_sequences)
+            
+
+    def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=True):
         
         # Allow empty prefix to be nice
         if prefix != '':
             prefix += '_'
        
         # Create output folder 
-        out_folder = pathlib.Path(out_folder)
+        out_folder = Path(out_folder)
         if not os.path.isdir(out_folder):
             os.mkdir(out_folder)
         
         # Remove file inside output folder
         elif remove_old_files:
             for fname in os.listdir(out_folder):
-                fname = pathlib.Path(fname)
+                fname = Path(fname)
                 if not os.path.isdir(fname):
                     os.remove(out_folder/fname)
     
@@ -426,15 +466,15 @@ class Pulser:
             if self.legends_l_k_m != [] and filenames is None:
                 l, k, m = self.legends_l_k_m[i]
                 final_state = self.final_states[i]
-                filename = pathlib.Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
+                filename = Path('seq_k_%02d_m_%d_l_%02d_f_%d.dc' % (k, m, l, final_state))
             
             # Assemble filenames using prefix and automatic counter
             elif filenames is None: 
                 if self.final_states != []:
                     final_state = self.final_states[i]
-                    filename = pathlib.Path('%s%03d_f_%d.dc' % (prefix, i, final_state))
+                    filename = Path('%s%03d_f_%d.dc' % (prefix, i, final_state))
                 else:
-                    filename = pathlib.Path('%s%03d.dc' % (prefix, i))
+                    filename = Path('%s%03d.dc' % (prefix, i))
             
             # Use specified filename list
             else:
@@ -467,7 +507,23 @@ def main():
     pulser.compile()
     pulser.write_files()
 
+
+def main_debug_decompile():
+    pulser = Pulser()
+    pulser.cycle_benchmark(m_list=[2], L=1)
+    pulser.compile()
+    pulser.decompile()
+    final_states_alt = []
+    for qc in pulser.circuits:
+        state = pulser.svsim.run(qk.transpile(qc, pulser.svsim)).result().get_statevector()
+        final_state_alt = int(np.around(np.abs(state[0]), 0))
+        final_states_alt.append(final_state_alt)
+    print(final_states_alt)
+    print(pulser.final_states)
+    
+
+
 if __name__ == '__main__':
-    main()
+    main_debug_decompile()
 
 
