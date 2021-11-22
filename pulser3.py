@@ -439,7 +439,7 @@ class Pulser:
 
     def decompile(self, n_cores=4):
         with Pool(n_cores) as p:
-            self.circuits = p.map(self.decompile_sequence, self.hfgui_sequences)
+            self.hfgui_circuits = p.map(self.decompile_sequence, self.hfgui_sequences)
             
 
     def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=True):
