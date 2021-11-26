@@ -204,9 +204,9 @@ class Pulser:
 
         # get angle from expression
         exec('expression = ' + word, globals())
-
-        # get equivalent positive angle
         angle = expression
+        
+        # Don't allow negative angles
         if angle < 0:
             angle = 2*pi + angle
 
@@ -280,6 +280,23 @@ class Pulser:
                     word += c
         return sentence
 
+    @staticmethod
+    def adapt_phase_for_negative_rotations(theta, phi):
+        if '-' in theta:
+            print(theta)
+            negative_theta = ''
+            for c in theta:
+                if c != '-':
+                    negative_theta += c
+            exec('phi_expr = %s' % phi, globals())
+            adapted_phi = str((phi_expr + pi) % (2*pi)) 
+            
+            return negative_theta, adapted_phi
+        
+        else:
+            return theta, phi
+
+            
 
     def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0):
        
@@ -354,22 +371,24 @@ class Pulser:
             # SIA qubit 0
             elif 'q[0]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                theta, phi = self.adapt_phase_for_negative_rotations(theta, phi)
+                theta = self.SIA_pitime(theta, ion=0)
+                theta = self.put_the_dot(theta)
                 if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
-                theta = self.SIA_pitime(theta, ion=0)
-                theta = self.put_the_dot(theta)
                 pulse = 'inline rot_1(%s, %s);' % (phi, theta)
                 qubit_0_pulses.append(pulse)
             
             # SIA qubit 1
             elif 'q[1]' in instruction:
                 theta, phi = self.get_from_parenthesis(instruction)
+                theta, phi = self.adapt_phase_for_negative_rotations(theta, phi)
+                theta = self.SIA_pitime(theta, ion=1)
+                theta = self.put_the_dot(theta)
                 if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
-                theta = self.SIA_pitime(theta, ion=1)
-                theta = self.put_the_dot(theta)
                 pulse = 'inline rot_2(%s, %s);' % (phi, theta)
                 qubit_1_pulses.append(pulse)
         
@@ -398,6 +417,7 @@ class Pulser:
             if n_cores > 0:
                 compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization) for circuit in self.circuits]
                 with Pool(n_cores) as p:
+                    print(compile_circuit_args)
                     result = p.starmap(self.compile_circuit, compile_circuit_args)
                 for sub_result in result:
                     self.hfgui_sequences.append(sub_result[0])
@@ -524,6 +544,5 @@ def main_debug_decompile():
 
 
 if __name__ == '__main__':
-    main_debug_decompile()
-
+    main()
 
