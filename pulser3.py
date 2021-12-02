@@ -214,6 +214,22 @@ class Pulser:
         new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion)
         return new_word
 
+    @staticmethod
+    def global_pitime(word):
+        """Converts angles to global field independent pitime"""
+
+        # get angle from expression
+        exec('expression = ' + word, globals())
+        angle = expression
+        
+        # Don't allow negative angles
+        if angle < 0:
+            angle = 2*pi + angle
+
+        angle_in_pi_units = angle / pi
+        new_word = '%f*tpi_fieldindep' % angle_in_pi_units
+        return new_word
+
 
     @staticmethod
     def put_the_dot(word='pi_0 * 23.456/4 * (pi_1/pi_0) / 4. / *(42.0 + 34) * pi3'):
@@ -283,7 +299,6 @@ class Pulser:
     @staticmethod
     def adapt_phase_for_negative_rotations(theta, phi):
         if '-' in theta:
-            print(theta)
             negative_theta = ''
             for c in theta:
                 if c != '-':
@@ -298,8 +313,8 @@ class Pulser:
 
             
 
-    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0):
-       
+    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
+
         # Transpile to something compatible with our system
         if transpile:
             # https://stackoverflow.com/a/17654868
@@ -322,7 +337,7 @@ class Pulser:
         if sentence != '':
             qasm_instructions.append(sentence)
 
-        # Get instructions after `qreg`
+        # Get instructions after first `qreg` appears
         high_level_index = None
         for i, raw_instruction in enumerate(qasm_instructions):
             if 'qreg' in raw_instruction:
@@ -338,6 +353,17 @@ class Pulser:
         # Translate instructions to hfgui pulses
         n_ms_gates = 0
         for instruction in high_level_instructions:
+
+            # One qubit mode
+            if one_ion_mode:
+                theta, phi = self.get_from_parenthesis(instruction)
+                theta, phi = self.adapt_phase_for_negative_rotations(theta, phi)
+                theta = self.global_pitime(theta)
+                theta = self.put_the_dot(theta)
+                phi = self.put_the_dot(phi)
+                pulse = 'carpulse(br_fieldindep + df_fieldindep, %s, %s);' % (phi, theta)
+                hfgui_pulses.append(pulse)
+                continue
             
             # MS Gates
             if 'q[0]' in instruction and 'q[1]' in instruction:
@@ -407,7 +433,7 @@ class Pulser:
         return hfgui_pulses, tqc
 
 
-    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, n_cores=4):
+    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
 
         # Get rid of (SymPy) deprecation warnings
         with warnings.catch_warnings():
@@ -415,9 +441,8 @@ class Pulser:
 
             # Use multiprocessing
             if n_cores > 0:
-                compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization) for circuit in self.circuits]
+                compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization, one_ion_mode) for circuit in self.circuits]
                 with Pool(n_cores) as p:
-                    print(compile_circuit_args)
                     result = p.starmap(self.compile_circuit, compile_circuit_args)
                 for sub_result in result:
                     self.hfgui_sequences.append(sub_result[0])
@@ -426,12 +451,13 @@ class Pulser:
             # Do not use multiprocessing
             else:
                 for circuit in self.circuits:
-                    hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization)
+                    hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization, one_ion_mode)
                     self.hfgui_sequences.append(hfgui_pulses)
                     self.hfgui_circuits.append(tqc)
 
 
     def decompile_sequence(self, sequence):
+        """Decompile hfgui pulses (only works with 2-qubit cirquits)"""
         qc = qk.QuantumCircuit(2)
         for pulse in sequence:
             # Get qubit_idx
