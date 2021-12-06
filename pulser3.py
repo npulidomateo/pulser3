@@ -311,7 +311,6 @@ class Pulser:
         else:
             return theta, phi
 
-            
 
     def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
 
@@ -337,13 +336,6 @@ class Pulser:
         if sentence != '':
             qasm_instructions.append(sentence)
 
-        # Get instructions after first `qreg` appears
-        high_level_index = None
-        for i, raw_instruction in enumerate(qasm_instructions):
-            if 'qreg' in raw_instruction:
-                high_level_index = i + 1
-                break
-        high_level_instructions = qasm_instructions[high_level_index:]
 
         # Parse high_level_instructions, reorder, transport, translate to pulses
         hfgui_pulses = []
@@ -352,7 +344,24 @@ class Pulser:
         
         # Translate instructions to hfgui pulses
         n_ms_gates = 0
-        for instruction in high_level_instructions:
+        for instruction in qasm_instructions:
+
+            # Ignore anything that is not a SIA rotation or an MS gate
+            ignore_instruction = False
+            ignore_list = ['qreg', 
+                           'creg', 
+                           'include', 
+                           'OPENQASM', 
+                           'gate', 
+                           'barrier', 
+                           'measure']
+            for word in ignore_list:
+                if word in instruction:
+                    ignore_instruction = True
+                    break
+            if ignore_instruction:
+                continue
+
 
             # One qubit mode
             if one_ion_mode:
@@ -361,7 +370,7 @@ class Pulser:
                 theta = self.global_pitime(theta)
                 theta = self.put_the_dot(theta)
                 phi = self.put_the_dot(phi)
-                pulse = 'carpulse(br_fieldindep + df_fieldindep, %s, %s);' % (phi, theta)
+                pulse = 'inline carpulseps(br_fieldindep + df_fieldindep, %s, %s);' % (phi, theta)
                 hfgui_pulses.append(pulse)
                 continue
             
