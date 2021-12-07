@@ -370,7 +370,7 @@ class Pulser:
                 theta = self.global_pitime(theta)
                 theta = self.put_the_dot(theta)
                 phi = self.put_the_dot(phi)
-                pulse = 'inline carpulseps(br_fieldindep + df_fieldindep, %s, %s);' % (phi, theta)
+                pulse = 'inline carpulseph(br_fieldindep + df_fieldindep, %s, %s);' % (phi, theta)
                 hfgui_pulses.append(pulse)
                 continue
             
