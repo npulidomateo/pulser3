@@ -96,7 +96,7 @@ class Pulser:
         return bloch_vector
 
 
-    def back_to_z(self, qc, verbose=False):
+    def back_to_z(self, qc, verbose=False, random=False):
         """ Go back to north or south poles.
 
         Pululates `self.final_states` with random choices 
@@ -105,7 +105,11 @@ class Pulser:
         params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
         """
-        final_state = self.rng.choice([0, 1])
+        if random:
+            final_state = self.rng.choice([0, 1])
+        else:
+            final_state = 0  # Always end in |00> 
+        
         if not final_state:
             dest_vector = np.array([0, 0, -1])
         else:
@@ -152,20 +156,27 @@ class Pulser:
         return engineered_gates
 
 
-    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True):
+    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True, z_rotations=False):
         self.circuits = []  # Reset circuits
 
         # Prepare basis change combinations
-        B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]
+        if z_rotations:
+            B_operators = [RXGate(pi/2), RYGate(pi/2), RZGate(pi/2), IGate()]
+        else:
+            B_operators = [RXGate(pi/2), RYGate(pi/2), IGate()]
         B_combinations = []
         for Bi in B_operators:
             for Bj in B_operators:
                 B_combinations.append((Bi, Bj))
+        
         # Don't use last combination (I, I)
         B_combinations = B_combinations[:-1]
 
         # Paulis to choose from:
-        paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
+        if z_rotations:
+            paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), RZGate(pi), RZGate(-pi), IGate()]
+        else:
+            paulis = [RXGate(pi), RXGate(-pi), RYGate(pi), RYGate(-pi), IGate()]
 
         # Assemble and store circuits and legends
         for l in range(L):
@@ -465,36 +476,42 @@ class Pulser:
                     self.hfgui_circuits.append(tqc)
 
 
-    def decompile_sequence(self, sequence):
+    def decompile_sequence(self, sequence, one_ion_mode=False):
         """Decompile hfgui pulses (only works with 2-qubit cirquits)"""
-        qc = qk.QuantumCircuit(2)
-        for pulse in sequence:
-            # Get qubit_idx
-            if 'ms_gate' in pulse:
-                qubit_idx = 2
-            elif 'rot_1' in pulse:
-                qubit_idx = 0
-            elif 'rot_2' in pulse:
-                qubit_idx = 1
-            else:
-                continue
+        if one_ion_mode:
+            qc = qk.QuantumCircuit(1)
+            for pulse in sequence:
+                print(pulse)
+                
+        else:
+            qc = qk.QuantumCircuit(2)
+            for pulse in sequence:
+                # Get qubit_idx
+                if 'ms_gate' in pulse:
+                    qubit_idx = 2
+                elif 'rot_1' in pulse:
+                    qubit_idx = 0
+                elif 'rot_2' in pulse:
+                    qubit_idx = 1
+                else:
+                    continue
 
-            if qubit_idx == 2:
-                qc.rxx(pi/2, 0, 1)
-            else:
-                phi, theta = self.get_from_parenthesis(pulse)
-                scan_pi_0 = pi
-                scan_pi_1 = pi
-                exec('theta_expr = ' + theta ,locals(), globals())
-                exec('phi_expr = ' + phi, locals() ,globals())
-                theta = theta_expr
-                phi = phi_expr
-                qc.r(theta, phi, qubit_idx)
-        return qc
+                if qubit_idx == 2:
+                    qc.rxx(pi/2, 0, 1)
+                else:
+                    phi, theta = self.get_from_parenthesis(pulse)
+                    scan_pi_0 = pi
+                    scan_pi_1 = pi
+                    exec('theta_expr = ' + theta ,locals(), globals())
+                    exec('phi_expr = ' + phi, locals() ,globals())
+                    theta = theta_expr
+                    phi = phi_expr
+                    qc.r(theta, phi, qubit_idx)
+            return qc
 
-    def decompile(self, n_cores=4):
+    def decompile(self, n_cores=4, one_ion_mode=False):
         with Pool(n_cores) as p:
-            self.hfgui_circuits = p.map(self.decompile_sequence, self.hfgui_sequences)
+            self.hfgui_circuits = p.starmap(self.decompile_sequence, [(sequence, one_ion_mode) for sequence in self.hfgui_sequences])
             
 
     def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=True):
