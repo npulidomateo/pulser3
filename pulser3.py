@@ -18,7 +18,7 @@
 
 import qiskit as qk
 from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, RZGate, RXXGate
-from qiskit.quantum_info import partial_trace
+from qiskit.quantum_info import partial_trace, Operator
 from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
 from pathlib import Path
@@ -33,6 +33,15 @@ pi = np.pi
 sx = np.array([[0, 1],[1, 0]])
 sy = np.array([[0, -1j],[1j, 0]])
 sz = np.array([[1, 0],[0, -1]])
+
+# Custom identity
+I_qc = qk.QuantumCircuit(2, name='I')
+I_qc.append(IGate(), [0])
+I_qc.append(IGate(), [1])
+I = I_qc.to_instruction()
+
+
+
 
 # https://quantumcomputing.stackexchange.com/a/16921
 # Style definition for qc.draw('mpl', style=style)
@@ -49,15 +58,44 @@ class Pulser:
 
     svsim = qk.Aer.get_backend('statevector_simulator')
 
-    def __init__(self, seed=999):
+    def __init__(self, ms_gate=None, seed=999):
         self.circuits = []
         self.legends_l_k_m = []
         self.final_states = []
         self.hfgui_sequences = []
         self.hfgui_circuits = []
+        self.do_ms_gate = True
+        self.ms = None
 
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
+        self.get_ms_gate(ms_gate)
+
+
+    # Custom MS gate
+    # https://quantumcomputing.stackexchange.com/a/8270/12406
+    def get_ms_gate(self, ms_gate=None):
+        
+        if ms_gate is None:
+            self.ms = RXXGate(pi/2)
+        
+        elif isinstance(ms_gate, np.ndarray):
+            if ms_gate.shape == (0,):
+                ms_gate = np.array(
+                                    [[1+0j, 0+0j, 0+0j, 0-1j],
+                                    [0+0j, 1+0j, 0-1j, 0+0j],
+                                    [0+0j, 0-1j, 1+0j, 0+0j],
+                                    [0-1j, 0+0j, 0+0j, 1+0j]]
+                                    ) / np.sqrt(2)
+                ms_op = Operator(ms_gate)
+            else:
+                ms_op = ms_gate
+            qc_ms = qk.QuantumCircuit(2, name='MS')
+            qc_ms.unitary(ms_op, [0, 1], label='MS')
+            self.ms = qc_ms.to_instruction()
+        
+        else:
+            self.ms = ms_gate
 
 
     @staticmethod
@@ -96,7 +134,7 @@ class Pulser:
         return bloch_vector
 
 
-    def back_to_z(self, qc, verbose=False, random=False):
+    def back_to_z(self, qc, verbose=False, random_z_projection=True):
         """ Go back to north or south poles.
 
         Pululates `self.final_states` with random choices 
@@ -104,16 +142,18 @@ class Pulser:
 
         params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
+
+        TODO: Make it work for arbitrary final states
         """
-        if random:
+        if random_z_projection:
             final_state = self.rng.choice([0, 1])
         else:
             final_state = 0  # Always end in |00> 
         
         if not final_state:
-            dest_vector = np.array([0, 0, -1])
-        else:
             dest_vector = np.array([0, 0, 1])
+        else:
+            dest_vector = np.array([0, 0, -1])
         self.final_states.append(final_state)
         
         engineered_gates = [None for _ in range(2)]
@@ -156,7 +196,8 @@ class Pulser:
         return engineered_gates
 
 
-    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True, z_rotations=False):
+    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True, z_rotations=True, random_z_projection=True, anti_ms_gate=False):
+        self.do_ms_gate = do_ms_gate
         self.circuits = []  # Reset circuits
 
         # Prepare basis change combinations
@@ -194,15 +235,19 @@ class Pulser:
                         i = self.rng.choice([idx for idx in range(len(paulis))])
                         j = self.rng.choice([idx for idx in range(len(paulis))])
                         Ri, Rj = paulis[i], paulis[j]
-                        if do_ms_gate:
-                            qc.append(RXXGate(pi/2), [0, 1])
+                        if self.do_ms_gate:
+                            if anti_ms_gate:
+                                qc.append(RXXGate(-pi/2), [0, 1])
+                            else:
+                                qc.append(RXXGate(pi/2), [0, 1])
+
                         else:
-                            qc.append(IGate(), [0, 1])
+                            qc.append(I, [0, 1])
                         qc.append(Ri, [0])
                         qc.append(Rj, [1])
                     # calculate and append the engineered gates
                     if final_pulses:
-                        engineered_gates = self.back_to_z(qc)
+                        engineered_gates = self.back_to_z(qc, random_z_projection=random_z_projection)
                         qc.append(engineered_gates[0], [0])
                         qc.append(engineered_gates[1], [1])
                     self.circuits.append(qc)
@@ -222,7 +267,7 @@ class Pulser:
             angle = 2*pi + angle
 
         angle_in_pi_units = angle / pi
-        new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion)
+        new_word = '%f*scan_pi_%d' % (angle_in_pi_units, ion+1)
         return new_word
 
     @staticmethod
@@ -323,7 +368,7 @@ class Pulser:
             return theta, phi
 
 
-    def compile_circuit(self, qc, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
+    def compile_circuit(self, qc, basis_gates=['I', 'rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
 
         # Transpile to something compatible with our system
         if transpile:
@@ -388,8 +433,8 @@ class Pulser:
             # MS Gates
             if 'q[0]' in instruction and 'q[1]' in instruction:
 
-                if 'rxx' not in instruction:
-                    continue
+                # if (('rxx' in instruction) or ('I' in instruction)):
+                    # continue
                 
                 if qubit_0_pulses != []:
                     hfgui_pulses.append('inline ion_1_potential();')
@@ -403,7 +448,7 @@ class Pulser:
                         hfgui_pulses.append(pulse)
                     qubit_1_pulses = []
                 
-                if do_ms_gate:
+                if self.do_ms_gate:
                     hfgui_pulses.append('inline ms_potential();')
                     hfgui_pulses.append('inline ms_gate(0.);')
                     n_ms_gates+=1
@@ -453,7 +498,7 @@ class Pulser:
         return hfgui_pulses, tqc
 
 
-    def compile(self, basis_gates=['rxx', 'r', 'id'], do_ms_gate=True, aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
+    def compile(self, basis_gates=['I','rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
 
         # Get rid of (SymPy) deprecation warnings
         with warnings.catch_warnings():
@@ -461,7 +506,7 @@ class Pulser:
 
             # Use multiprocessing
             if n_cores > 0:
-                compile_circuit_args = [(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization, one_ion_mode) for circuit in self.circuits]
+                compile_circuit_args = [(circuit, basis_gates, aczs_comp, transpile, transpile_optimization, one_ion_mode) for circuit in self.circuits]
                 with Pool(n_cores) as p:
                     result = p.starmap(self.compile_circuit, compile_circuit_args)
                 for sub_result in result:
@@ -471,13 +516,14 @@ class Pulser:
             # Do not use multiprocessing
             else:
                 for circuit in self.circuits:
-                    hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, do_ms_gate, aczs_comp, transpile, transpile_optimization, one_ion_mode)
+                    hfgui_pulses, tqc = self.compile_circuit(circuit, basis_gates, aczs_comp, transpile, transpile_optimization, one_ion_mode)
                     self.hfgui_sequences.append(hfgui_pulses)
                     self.hfgui_circuits.append(tqc)
 
 
-    def decompile_sequence(self, sequence, one_ion_mode=False):
+    def decompile_sequence(self, sequence, one_ion_mode=False, anti_ms_gate=False):
         """Decompile hfgui pulses (only works with 2-qubit cirquits)"""
+
         if one_ion_mode:
             qc = qk.QuantumCircuit(1)
             for pulse in sequence:
@@ -497,11 +543,16 @@ class Pulser:
                     continue
 
                 if qubit_idx == 2:
-                    qc.rxx(pi/2, 0, 1)
+                    if anti_ms_gate:
+                        qc.rxx(-pi/2, 0, 1)
+                    else:
+                        qc.rxx(pi/2, 0, 1)
+
                 else:
                     phi, theta = self.get_from_parenthesis(pulse)
-                    scan_pi_0 = pi
+                    scan_pi_0 = pi  # Get rid of this
                     scan_pi_1 = pi
+                    scan_pi_2 = pi
                     exec('theta_expr = ' + theta ,locals(), globals())
                     exec('phi_expr = ' + phi, locals() ,globals())
                     theta = theta_expr
@@ -509,9 +560,9 @@ class Pulser:
                     qc.r(theta, phi, qubit_idx)
             return qc
 
-    def decompile(self, n_cores=4, one_ion_mode=False):
+    def decompile(self, n_cores=4, one_ion_mode=False, anti_ms_gate=False):
         with Pool(n_cores) as p:
-            self.hfgui_circuits = p.starmap(self.decompile_sequence, [(sequence, one_ion_mode) for sequence in self.hfgui_sequences])
+            self.hfgui_circuits = p.starmap(self.decompile_sequence, [(sequence, one_ion_mode, anti_ms_gate) for sequence in self.hfgui_sequences])
             
 
     def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=True):
