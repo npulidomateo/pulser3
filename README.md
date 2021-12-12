@@ -49,6 +49,7 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Use multiple cores
 - [x] `decompiler` to load the pulses into gates
 - [ ] `decompiler` fix ion_0 ion_1 convention!
+- [ ] Arbitrary, user specified MS operator
 
 ### Wishlist
 

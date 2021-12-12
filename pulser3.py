@@ -65,28 +65,27 @@ class Pulser:
         self.hfgui_sequences = []
         self.hfgui_circuits = []
         self.do_ms_gate = True
+        self.default_ms_matrix = np.array(
+                                          [[1+0j, 0+0j, 0+0j, 0-1j],
+                                          [0+0j, 1+0j, 0-1j, 0+0j],
+                                          [0+0j, 0-1j, 1+0j, 0+0j],
+                                          [0-1j, 0+0j, 0+0j, 1+0j]]
+                                         ) / np.sqrt(2)
         self.ms = None
+
+        self.get_ms_gate(ms_gate)
 
         # Make the generated sequences reproducible
         self.rng = np.random.default_rng(seed)
-        self.get_ms_gate(ms_gate)
 
 
     # Custom MS gate
     # https://quantumcomputing.stackexchange.com/a/8270/12406
     def get_ms_gate(self, ms_gate=None):
         
-        if ms_gate is None:
-            self.ms = RXXGate(pi/2)
-        
-        elif isinstance(ms_gate, np.ndarray):
+        if isinstance(ms_gate, np.ndarray):
             if ms_gate.shape == (0,):
-                ms_gate = np.array(
-                                    [[1+0j, 0+0j, 0+0j, 0-1j],
-                                    [0+0j, 1+0j, 0-1j, 0+0j],
-                                    [0+0j, 0-1j, 1+0j, 0+0j],
-                                    [0-1j, 0+0j, 0+0j, 1+0j]]
-                                    ) / np.sqrt(2)
+                ms_gate = self.default_ms_matrix
                 ms_op = Operator(ms_gate)
             else:
                 ms_op = ms_gate
@@ -95,7 +94,13 @@ class Pulser:
             self.ms = qc_ms.to_instruction()
         
         else:
-            self.ms = ms_gate
+            print('ms_gate', ms_gate)
+            if ms_gate is None:
+                print('ms_gate was None')
+                ms_gate = RXXGate(pi/2)
+            ms_qc = qk.QuantumCircuit(2, name='MS')
+            ms_qc.append(ms_gate, [0, 1])
+            self.ms = ms_qc.to_instruction()
 
 
     @staticmethod
