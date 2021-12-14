@@ -19,7 +19,6 @@
 import qiskit as qk
 from qiskit.circuit.library.standard_gates import RGate, IGate, RXGate, RYGate, RZGate, RXXGate
 from qiskit.quantum_info import partial_trace, Operator
-from qiskit.visualization import plot_bloch_multivector, plot_histogram
 import numpy as np
 from pathlib import Path
 import os
@@ -39,18 +38,6 @@ I_qc = qk.QuantumCircuit(2, name='I')
 I_qc.append(IGate(), [0])
 I_qc.append(IGate(), [1])
 I = I_qc.to_instruction()
-
-
-
-
-# https://quantumcomputing.stackexchange.com/a/16921
-# Style definition for qc.draw('mpl', style=style)
-style={'displaycolor': {
-        'Rx': ('#00ff00', '#000000'),
-        'Ry': ('#00ff00', '#000000'),
-        'Rz': ('#00ff00', '#000000'),
-        'Rxx': ('#ff5599', '#000000'),
-        }}
 
 
 class Pulser:
@@ -94,9 +81,7 @@ class Pulser:
             self.ms = qc_ms.to_instruction()
         
         else:
-            print('ms_gate', ms_gate)
             if ms_gate is None:
-                print('ms_gate was None')
                 ms_gate = RXXGate(pi/2)
             ms_qc = qk.QuantumCircuit(2, name='MS')
             ms_qc.append(ms_gate, [0, 1])
@@ -201,7 +186,7 @@ class Pulser:
         return engineered_gates
 
 
-    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True, z_rotations=True, random_z_projection=True, anti_ms_gate=False):
+    def cycle_benchmark(self, m_list=[4, 8], L=5, final_pulses=True, do_ms_gate=True, z_rotations=True, random_z_projection=True):
         self.do_ms_gate = do_ms_gate
         self.circuits = []  # Reset circuits
 
@@ -241,11 +226,7 @@ class Pulser:
                         j = self.rng.choice([idx for idx in range(len(paulis))])
                         Ri, Rj = paulis[i], paulis[j]
                         if self.do_ms_gate:
-                            if anti_ms_gate:
-                                qc.append(RXXGate(-pi/2), [0, 1])
-                            else:
-                                qc.append(RXXGate(pi/2), [0, 1])
-
+                            qc.append(self.ms, [0, 1])
                         else:
                             qc.append(I, [0, 1])
                         qc.append(Ri, [0])
@@ -373,7 +354,7 @@ class Pulser:
             return theta, phi
 
 
-    def compile_circuit(self, qc, basis_gates=['I', 'rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
+    def compile_circuit(self, qc, basis_gates=['I', 'MS', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
 
         # Transpile to something compatible with our system
         if transpile:
@@ -503,7 +484,7 @@ class Pulser:
         return hfgui_pulses, tqc
 
 
-    def compile(self, basis_gates=['I','rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
+    def compile(self, basis_gates=['I','MS', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
 
         # Get rid of (SymPy) deprecation warnings
         with warnings.catch_warnings():
@@ -526,7 +507,7 @@ class Pulser:
                     self.hfgui_circuits.append(tqc)
 
 
-    def decompile_sequence(self, sequence, one_ion_mode=False, anti_ms_gate=False):
+    def decompile_sequence(self, sequence, one_ion_mode=False):
         """Decompile hfgui pulses (only works with 2-qubit cirquits)"""
 
         if one_ion_mode:
@@ -548,14 +529,10 @@ class Pulser:
                     continue
 
                 if qubit_idx == 2:
-                    if anti_ms_gate:
-                        qc.rxx(-pi/2, 0, 1)
-                    else:
-                        qc.rxx(pi/2, 0, 1)
+                    qc.append(self.ms, [0, 1])
 
                 else:
                     phi, theta = self.get_from_parenthesis(pulse)
-                    scan_pi_0 = pi  # Get rid of this
                     scan_pi_1 = pi
                     scan_pi_2 = pi
                     exec('theta_expr = ' + theta ,locals(), globals())
@@ -565,9 +542,9 @@ class Pulser:
                     qc.r(theta, phi, qubit_idx)
             return qc
 
-    def decompile(self, n_cores=4, one_ion_mode=False, anti_ms_gate=False):
+    def decompile(self, n_cores=4, one_ion_mode=False):
         with Pool(n_cores) as p:
-            self.hfgui_circuits = p.starmap(self.decompile_sequence, [(sequence, one_ion_mode, anti_ms_gate) for sequence in self.hfgui_sequences])
+            self.hfgui_circuits = p.starmap(self.decompile_sequence, [(sequence, one_ion_mode) for sequence in self.hfgui_sequences])
             
 
     def write_files(self, out_folder='sequences', remove_old_files=False, prefix='seq', filenames=None, write_circuits=True):
