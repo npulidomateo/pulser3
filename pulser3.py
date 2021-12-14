@@ -25,6 +25,12 @@ import os
 import warnings
 from multiprocessing import Pool
 
+try:
+    import shutup
+    shutup.please()
+except ModuleNotFoundError:
+    print('Please consider installing https://github.com/polvoazul/shutup')
+
 # Alias numpy pi for convenience
 pi = np.pi
 
@@ -41,7 +47,12 @@ I = I_qc.to_instruction()
 
 
 class Pulser:
-    """Create, store, transpile and compile 2-qubit quantum circuits"""
+    """Create, store, transpile and compile 2-qubit quantum circuits
+
+        CAUTION: if initialized with custom ms_gate and manually loaded with
+                 external circuits, compile will not be able to transpile to
+                 the custom ms_gate  
+    """
 
     svsim = qk.Aer.get_backend('statevector_simulator')
 
@@ -353,6 +364,13 @@ class Pulser:
         else:
             return theta, phi
 
+    @staticmethod
+    def deg_to_rad(phi):
+        # https://stackoverflow.com/a/23168372
+        exec('phi_expr = ' + phi, globals(), globals())
+        phi = phi_expr
+        phi *= 180 / pi
+        return str(phi)
 
     def compile_circuit(self, qc, basis_gates=['I', 'MS', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
 
@@ -451,6 +469,7 @@ class Pulser:
                 theta, phi = self.adapt_phase_for_negative_rotations(theta, phi)
                 theta = self.SIA_pitime(theta, ion=0)
                 theta = self.put_the_dot(theta)
+                phi = self.deg_to_rad(phi)
                 if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
@@ -463,6 +482,7 @@ class Pulser:
                 theta, phi = self.adapt_phase_for_negative_rotations(theta, phi)
                 theta = self.SIA_pitime(theta, ion=1)
                 theta = self.put_the_dot(theta)
+                phi = self.deg_to_rad(phi)
                 if aczs_comp and n_ms_gates > 0:
                     phi += ' + ACZS*gate_time*360.*%d.' % n_ms_gates
                 phi = self.put_the_dot(phi)
@@ -533,12 +553,16 @@ class Pulser:
 
                 else:
                     phi, theta = self.get_from_parenthesis(pulse)
+                    global scan_pi_1
+                    global scan_pi_2
                     scan_pi_1 = pi
                     scan_pi_2 = pi
-                    exec('theta_expr = ' + theta ,locals(), globals())
-                    exec('phi_expr = ' + phi, locals() ,globals())
+                    # https://stackoverflow.com/a/23168372
+                    exec('theta_expr = ' + theta , globals(), globals())
+                    exec('phi_expr = ' + phi, globals(), globals())
                     theta = theta_expr
                     phi = phi_expr
+                    phi = phi * pi / 180
                     qc.r(theta, phi, qubit_idx)
             return qc
 
