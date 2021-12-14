@@ -24,6 +24,7 @@ from pathlib import Path
 import os
 import warnings
 from multiprocessing import Pool
+import sys
 
 try:
     import shutup
@@ -102,6 +103,7 @@ class Pulser:
     @staticmethod
     def cartesian_to_spherical(vector_car):
     # https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
+    #CUTION see https://en.wikipedia.org/wiki/Atan2
         r = np.linalg.norm(vector_car)
         x, y, z = vector_car
         if r < 0.00001:
@@ -109,10 +111,16 @@ class Pulser:
         theta = np.arccos(z / r)
         if x > 0:
             phi = np.arctan(y/ x)
-        elif x < 0:
+        elif x < 0 and y >= 0:
             phi = np.arctan(y/x) + np.pi
+        elif x < 0 and y < 0:
+            phi = np.arctan(y/x) - np.pi
+        elif x == 0 and y > 0:
+            phi = np.pi / 2 
+        elif x == 0 and y < 0:
+            phi = -np.pi / 2 
         else:
-            phi = 0
+            sys.exit(1)
         return np.array([r, theta, phi]).transpose()
 
 
@@ -163,17 +171,24 @@ class Pulser:
         for qubit, subsystem in enumerate(subsystems):
             bloch_vector = self.get_bloch_vector(subsystem)
             rotation_axis = np.cross(bloch_vector, dest_vector)
-            if np.linalg.norm(rotation_axis) <= 1e-5 and np.inner(bloch_vector, dest_vector) < 0:
-                phi = 0
-                rotation_angle = pi
+            if np.linalg.norm(rotation_axis) <= 1e-7:
                 if verbose:
-                    print()
-                    print('bloch_vector', bloch_vector)
-                    print('dest_vector', dest_vector)
-                    print('rotation_axis', rotation_axis)
-                    print('anti-parallel --> pi flip')
+                        print()
+                        print('bloch_vector', bloch_vector)
+                        print('dest_vector', dest_vector)
+                        print('rotation_axis', rotation_axis)
+                if np.inner(bloch_vector, dest_vector) < 0:
+                    phi = 0
+                    rotation_angle = pi
+                    if verbose:
+                        print('anti-parallel --> pi flip')
+                    gate = RGate(rotation_angle, phi)
+                elif np.inner(bloch_vector, dest_vector) > 0:
+                    if verbose:
+                        print('parallel --> I')
+                    gate = IGate()
             else:
-                rotation_angle = np.arcsin(np.linalg.norm(rotation_axis) / np.linalg.norm(bloch_vector) / np.linalg.norm(dest_vector))
+                rotation_angle = np.arcsin(np.linalg.norm(rotation_axis) / (np.linalg.norm(bloch_vector) * np.linalg.norm(dest_vector)))
                 r, theta, phi = self.cartesian_to_spherical(rotation_axis)
                 if verbose:
                     print()
@@ -181,9 +196,6 @@ class Pulser:
                     print('dest_vector', dest_vector)
                     print('rotation_axis', rotation_axis)
                     print('rotation_angle', rotation_angle)
-            if np.abs(rotation_angle) < 1e-5:
-                gate = IGate()
-            else:
                 gate = RGate(rotation_angle, phi)
             engineered_gates[qubit] = gate
         
