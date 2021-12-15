@@ -424,7 +424,7 @@ class Pulser:
                            'creg', 
                            'include', 
                            'OPENQASM', 
-                           'gate', 
+                           'gate ', 
                            'barrier', 
                            'measure']
             for word in ignore_list:
