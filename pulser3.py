@@ -384,7 +384,7 @@ class Pulser:
         phi *= 180 / pi
         return str(phi)
 
-    def compile_circuit(self, qc, basis_gates=['I', 'MS', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
+    def compile_circuit(self, qc, basis_gates=['I', 'rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False):
 
         # Transpile to something compatible with our system
         if transpile:
@@ -516,7 +516,7 @@ class Pulser:
         return hfgui_pulses, tqc
 
 
-    def compile(self, basis_gates=['I','MS', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
+    def compile(self, basis_gates=['I','rxx', 'r', 'id'], aczs_comp=True, transpile=True, transpile_optimization=0, one_ion_mode=False, n_cores=4):
 
         # Get rid of (SymPy) deprecation warnings
         with warnings.catch_warnings():
