@@ -630,12 +630,12 @@ class Pulser:
                     line = ''
                     for c in circuit_text:
                         if c in ['\n', '\r']:
-                            print('//' + line, file=f)
+                            print(('//' + line).encode('utf8'), file=f)
                             line = ''
                         else:
                             line += c
                     if line != '':
-                        print('//' + line, file=f)
+                        print(('//' + line).encode("utf8"), file=f)
 
                 # Write pulses
                 for pulse in sequence:
