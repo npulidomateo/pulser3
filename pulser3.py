@@ -622,7 +622,7 @@ class Pulser:
                 filename = filenames[i]
                 
             # Write files
-            with open(out_folder/filename, 'w') as f:
+            with open(out_folder/filename, 'w', encoding="utf-8") as f:
 
                 # Write circuit as comment
                 if write_circuits:
@@ -630,12 +630,12 @@ class Pulser:
                     line = ''
                     for c in circuit_text:
                         if c in ['\n', '\r']:
-                            print(('//' + line).encode('utf8'), file=f)
+                            print('//' + line, file=f)
                             line = ''
                         else:
                             line += c
                     if line != '':
-                        print(('//' + line).encode("utf8"), file=f)
+                        print('//' + line, file=f)
 
                 # Write pulses
                 for pulse in sequence:
