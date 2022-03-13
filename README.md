@@ -9,25 +9,13 @@ Create 2-qubit pulse sequences for *cycle benchmarking* and read sequences from 
 
 ## Installation
 
-### Method 1
-Copy the file `pulser3.py` in the same folder as your script.
+1. Create a virtual environment e.g.
+  
+`conda create -n pulser python=3`
 
-### Method 2
-Add the following lines to the beginning of your script:
-``` python
-import sys
-import pathlib
-installation_path = pathlib.Path('/absolute/path/to/installation/folder')
-sys.path.append(installation_path)
-```
-### Method 3 (Linux only)
-Add the absolute path of the installation folder to your `$PYTHONPATH` enviroment variable.
+2. Install with pip
 
-For example add to your `.bashrc`
-
-``` bash
-export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
-```
+`pip install -e .`
 
 ## TODO
 
@@ -49,10 +37,10 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 - [x] Use multiple cores
 - [x] `decompiler` to load the pulses into gates
 - [ ] `decompiler` fix ion_0 ion_1 convention!
-- [ ] Arbitrary, user specified MS operator
 
 ### Wishlist
 
+- [ ] Arbitrary, user specified MS operator
 - [ ] Function to transform `U3Gate`s in minimum set of`RGate`s
 - [ ] Read circuits from files
 - [ ] Write jupyter tutorial 
@@ -63,12 +51,13 @@ export PYTHONPATH="${PYTHONPATH}:/absolute/path/to/installation/folder"
 
 | module                    | version   |
 |---------------------------|-----------|
-| qiskit-aer                | 0.9.1     |
-| qiskit-ignis              | 0.6.0     |
-| qiskit-ibmq-provider      | 0.17.0    |
-| qiskit-aqua               | 0.9.5     |
-| qiskit                    | 0.31.0    |
-| qiskit-nature             | None      |
-| qiskit-finance            | None      |
-| qiskit-optimization       | None      |
-| qiskit-machine-learning   | None      |
+| qiskit-terra | 0.19.2 |
+| qiskit-aer | 0.10.3 |
+| qiskit-ignis | 0.7.0 |
+| qiskit-ibmq-provider | 0.18.3 |
+| qiskit-aqua | 0.9.5 |
+| qiskit | 0.34.2 |
+| qiskit-nature | None |
+| qiskit-finance | None |
+| qiskit-optimization | None |
+| qiskit-machine-learning | None |
