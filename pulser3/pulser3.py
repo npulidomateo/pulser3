@@ -624,11 +624,7 @@ class Pulser:
                 filename = filenames[i]
                 
             # Write files
-<<<<<<< HEAD:pulser3.py
-            with open(out_folder/filename, 'w', encoding="utf-8") as f:
-=======
             with open(out_folder/filename, 'w', encoding='utf-8') as f:
->>>>>>> dev:pulser3/pulser3.py
 
                 # Write circuit as comment
                 if write_circuits:
