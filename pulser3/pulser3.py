@@ -53,6 +53,7 @@ class Pulser:
         CAUTION: if initialized with custom ms_gate and manually loaded with
                  external circuits, compile will not be able to transpile to
                  the custom ms_gate  
+        TODO: Fix the above!
     """
 
     svsim = qk.Aer.get_backend('statevector_simulator')
@@ -103,7 +104,7 @@ class Pulser:
     @staticmethod
     def cartesian_to_spherical(vector_car):
     # https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
-    #CUTION see https://en.wikipedia.org/wiki/Atan2
+    # CAUTION! see https://en.wikipedia.org/wiki/Atan2
         r = np.linalg.norm(vector_car)
         x, y, z = vector_car
         if r < 0.00001:
@@ -152,7 +153,7 @@ class Pulser:
         params: qc (two qubit quantum circuit)
         returns: list of engineered_gates (two)
 
-        TODO: Make it work for arbitrary final states
+        TODO: Allow for arbitrary final states (not really back to z then)
         """
         if random_z_projection:
             final_state = self.rng.choice([0, 1])
@@ -595,6 +596,7 @@ class Pulser:
             os.mkdir(out_folder)
         
         # Remove file inside output folder
+        # TODO: use pathlib and not os
         elif remove_old_files:
             for fname in os.listdir(out_folder):
                 fname = Path(fname)
@@ -611,7 +613,7 @@ class Pulser:
             
             # Assemble filenames using prefix and automatic counter
             elif filenames is None: 
-                if self.final_states != []:
+                if self.final_states != [] and len(self.hfgui_sequences) == len(self.final_states):
                     final_state = self.final_states[i]
                     filename = Path('%s%03d_f_%d.dc' % (prefix, i, final_state))
                 else:
@@ -622,7 +624,11 @@ class Pulser:
                 filename = filenames[i]
                 
             # Write files
+<<<<<<< HEAD:pulser3.py
             with open(out_folder/filename, 'w', encoding="utf-8") as f:
+=======
+            with open(out_folder/filename, 'w', encoding='utf-8') as f:
+>>>>>>> dev:pulser3/pulser3.py
 
                 # Write circuit as comment
                 if write_circuits:
@@ -646,7 +652,7 @@ def main():
     pulser = Pulser()
     pulser.cycle_benchmark(m_list=[4, 8], L=5)
     pulser.compile()
-    pulser.write_files()
+    pulser.write_files(remove_old_files=True)
 
 
 def main_debug_decompile():

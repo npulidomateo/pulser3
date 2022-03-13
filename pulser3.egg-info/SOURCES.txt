@@ -1,0 +1,11 @@
+COPYING
+README.md
+pyproject.toml
+setup.cfg
+pulser3/__init__.py
+pulser3/pulser3.py
+pulser3.egg-info/PKG-INFO
+pulser3.egg-info/SOURCES.txt
+pulser3.egg-info/dependency_links.txt
+pulser3.egg-info/requires.txt
+pulser3.egg-info/top_level.txt
